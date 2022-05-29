@@ -116,7 +116,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     TCHAR moduleFileName[MAX_PATH];
     GetModuleFileNameA((HMODULE)param, (LPSTR)moduleFileName, MAX_PATH);
     std::string::size_type pos = std::string(moduleFileName).find_last_of("\\/");
-    std::string configPath = std::string(moduleFileName).substr(0, pos).append("\\").append("lcconfig.ini");
+    std::string configPath = std::string(moduleFileName).substr(0, pos).append("\\").append("taRconfig.ini");
     width = GetPrivateProfileIntA("CONFIG","width",800,configPath.c_str());
     height = GetPrivateProfileIntA("CONFIG","height",600,configPath.c_str());
     windowed = GetPrivateProfileIntA("CONFIG","windowed",0,configPath.c_str());
