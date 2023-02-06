@@ -26,6 +26,8 @@ It currently supports overlay.exe for the USA version of Ratatouille.
 
 - borderless=0 / borderless=1 --> toggles borderless mode (only available with windowed on as well)
 
+- console=0 / console=1 --> toggles the console window
+
 - width={number} --> to set the width in pixels of the game
 
 - height={number} --> to set the height in pixels of the game
