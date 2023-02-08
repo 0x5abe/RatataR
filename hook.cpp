@@ -6,6 +6,7 @@ unsigned int width;
 bool borderless;
 bool windowed;
 bool console;
+bool popupMenu;
 BYTE* resW;
 BYTE* resH;
 
@@ -66,8 +67,8 @@ void __declspec(naked) hSetWindowPosPushWND() {
     }
 }
 
-DWORD jmpBackAddressShowConsole;
-void __declspec(naked) hShowConsole() {
+DWORD jmpBackAddressConsoleEnable;
+void __declspec(naked) hEnableConsole() {
     __asm {
         or dword ptr ds:[ecx+0x6C6C],eax
         test byte ptr ds:[ecx+0x6C6C],0x40
@@ -79,6 +80,24 @@ void __declspec(naked) hShowConsole() {
         push eax
         call ShowWindow
         mov eax,dword ptr ss:[esp+4]
+        go_back:
+        jmp [jmpBackAddressConsoleEnable]
+    }
+}
+
+
+DWORD jmpBackAddressShowConsole;
+void __declspec(naked) hShowConsole() {
+    __asm {
+        and dword ptr ds:[esi+0x6C6C],ebx
+        test byte ptr ds:[esi+0x6C6C],0x40
+        jnz go_back
+        mov ebx,dword ptr ds:[esi+0x6C8C]
+        test ebx,ebx
+        jz go_back
+        push 0x0
+        push ebx
+        call ShowWindow
         go_back:
         jmp [jmpBackAddressShowConsole]
     }
@@ -104,10 +123,9 @@ void applyPatches(LPVOID param) {
     BYTE patchWindowPosBorderless[] = {0x00,0x00,0x00,0x00};
     BYTE patchBorderless[] = {0x0a};
     BYTE patchWindowKey[] = {0x06};
-    BYTE patchConsole0[] = {0xEB};
-    BYTE patchConsole1[] = {0x8B, 0x0D, 0xA0, 0xE8, 0x7D, 0x00, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
-    BYTE patchConsole2[] = {0x1F, 0xBE, 0x18};
-    BYTE patchConsole3[] = {0x90, 0x90, 0x90};
+    BYTE patchConsole[] = {0x90, 0x90, 0x90};
+    BYTE patchPopupMenu0[] = {0x90, 0x90};
+    BYTE patchPopupMenu1[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
 
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
@@ -136,11 +154,12 @@ void applyPatches(LPVOID param) {
 
     //Enable console
     if (console) {
-        patch((BYTE*)0x004DE8E7, patchConsole0, 1);
-        patch((BYTE*)0x004DE900, patchConsole1, 12);
-        patch((BYTE*)0x004DE90D, patchConsole2, 3);
-        patch((BYTE*)0x004DE913, patchConsole3, 3);
-        patch((BYTE*)0x0066A2E4, patchConsole3, 3);
+        patch((BYTE*)0x0066A2E4, patchConsole, 3);
+    }
+
+    if (popupMenu) {
+        patch((BYTE*)0x00670983, patchPopupMenu0, 2);
+        patch((BYTE*)0x00674738, patchPopupMenu1, 6);
     }
 }
 
@@ -154,18 +173,22 @@ DWORD WINAPI MainThread(LPVOID param) {
     windowed = GetPrivateProfileIntA("CONFIG","windowed",0,configPath.c_str());
     borderless = GetPrivateProfileIntA("CONFIG","borderless",0,configPath.c_str());
     console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
+    popupMenu = GetPrivateProfileIntA("CONFIG","popupMenu",0,configPath.c_str());
     resW = reinterpret_cast<BYTE*>(&width);
     resH = reinterpret_cast<BYTE*>(&height);
 
     DWORD hookAddressCursor = 0x670991;
     DWORD hookAddressSetWindowPosPush = 0x67a9d0;
     DWORD hookAddressConsoleEnable = 0x66a2e7;
+    DWORD hookAddressShowConsole = 0x005fbd0b;
     size_t hookLengthCursor = 6;
     size_t hookLengthSetWindowPosPush = 6;
     size_t hookLengthConsoleEnable = 6;
+    size_t hookLengthShowConsole = 6;
     jmpBackAddressCursor = hookAddressCursor+hookLengthCursor;
     jmpBackAddressSetWindowPosPush = hookAddressSetWindowPosPush+hookLengthSetWindowPosPush;
-    jmpBackAddressShowConsole = hookAddressConsoleEnable+hookLengthConsoleEnable;
+    jmpBackAddressConsoleEnable = hookAddressConsoleEnable+hookLengthConsoleEnable;
+    jmpBackAddressShowConsole = hookAddressShowConsole+hookLengthShowConsole;
     applyPatches(param);
     hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
     if (windowed && borderless) {
@@ -174,7 +197,8 @@ DWORD WINAPI MainThread(LPVOID param) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
     }
     if (console) {
-        hook((void*)hookAddressConsoleEnable,hShowConsole,hookLengthConsoleEnable);
+        hook((void*)hookAddressConsoleEnable,hEnableConsole,hookLengthConsoleEnable);
+        hook((void*)hookAddressShowConsole,hShowConsole,hookLengthShowConsole);
     }
     return 0;
 }
