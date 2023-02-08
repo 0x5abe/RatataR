@@ -28,6 +28,8 @@ It currently supports overlay.exe for the USA version of Ratatouille.
 
 - console=0 / console=1 --> toggles the console window
 
+- popupMenu=0 / popupMenu=1 --> toggles popup menu (open with right click)
+
 - width={number} --> to set the width in pixels of the game
 
 - height={number} --> to set the height in pixels of the game
