@@ -30,6 +30,8 @@ It currently supports overlay.exe for the USA version of Ratatouille.
 
 - popupMenu=0 / popupMenu=1 --> toggles popup menu (open with right click)
 
+- invertVerticalLook=0 / invertVerticalLook=1 --> Inverts the Mouse Y Axis
+
 - width={number} --> to set the width in pixels of the game
 
 - height={number} --> to set the height in pixels of the game
