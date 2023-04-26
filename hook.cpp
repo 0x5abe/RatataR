@@ -7,6 +7,7 @@ bool borderless;
 bool windowed;
 bool console;
 bool popupMenu;
+bool invertVerticalLook;
 BYTE* resW;
 BYTE* resH;
 
@@ -126,6 +127,7 @@ void applyPatches(LPVOID param) {
     BYTE patchConsole[] = {0x90, 0x90, 0x90};
     BYTE patchPopupMenu0[] = {0x90, 0x90};
     BYTE patchPopupMenu1[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
+    BYTE patchInvertVerticalLook[] = {0x01};
 
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
@@ -161,6 +163,10 @@ void applyPatches(LPVOID param) {
         patch((BYTE*)0x00670983, patchPopupMenu0, 2);
         patch((BYTE*)0x00674738, patchPopupMenu1, 6);
     }
+    
+    if (invertVerticalLook) {
+        patch((BYTE*)0x00406DB0, patchInvertVerticalLook, 1);
+    }
 }
 
 DWORD WINAPI MainThread(LPVOID param) {
@@ -174,6 +180,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     borderless = GetPrivateProfileIntA("CONFIG","borderless",0,configPath.c_str());
     console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
     popupMenu = GetPrivateProfileIntA("CONFIG","popupMenu",0,configPath.c_str());
+    invertVerticalLook = GetPrivateProfileIntA("CONFIG","invertVerticalLook",0,configPath.c_str());
     resW = reinterpret_cast<BYTE*>(&width);
     resH = reinterpret_cast<BYTE*>(&height);
 
