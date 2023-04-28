@@ -30,7 +30,9 @@ It currently supports overlay.exe for the USA version of Ratatouille.
 
 - popupMenu=0 / popupMenu=1 --> toggles popup menu (open with right click)
 
-- invertVerticalLook=0 / invertVerticalLook=1 --> Inverts the Mouse Y Axis
+- invertVerticalLook=0 / invertVerticalLook=1 --> inverts the mouse Y Axis
+
+- removeFpsCap=0 / removeFpsCap=1 --> removes the 500 fps cap the game enforces
 
 - width={number} --> to set the width in pixels of the game
 

@@ -1,5 +1,6 @@
 #include <Windows.h>
-#include<iostream>
+#include <iostream>
+#include <timeapi.h>
 
 unsigned int height;
 unsigned int width;
@@ -8,6 +9,7 @@ bool windowed;
 bool console;
 bool popupMenu;
 bool invertVerticalLook;
+bool removeFpsCap;
 BYTE* resW;
 BYTE* resH;
 
@@ -104,6 +106,27 @@ void __declspec(naked) hShowConsole() {
     }
 }
 
+DWORD jmpBackAddressFpsFix1;
+void __declspec(naked) hFpsFix1() {
+    __asm {
+        add dword ptr ds:[0x007df954],0x1
+        push 0x1
+        call timeBeginPeriod
+        jmp [jmpBackAddressFpsFix1]
+    }
+}
+
+DWORD jmpBackAddressFpsFix2;
+uint32_t cleanUp = 0x005c5170;
+void __declspec(naked) hFpsFix2() {
+    __asm {
+        call cleanUp
+        push 0x1
+        call timeEndPeriod
+        jmp [jmpBackAddressFpsFix2]
+    }
+}
+
 void patch(BYTE* ptr, BYTE* buf, size_t len) {
     DWORD curProtection;
     VirtualProtect(ptr, len, PAGE_EXECUTE_READWRITE, &curProtection);
@@ -128,6 +151,7 @@ void applyPatches(LPVOID param) {
     BYTE patchPopupMenu0[] = {0x90, 0x90};
     BYTE patchPopupMenu1[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
     BYTE patchInvertVerticalLook[] = {0x01};
+    BYTE patchRemoveFpsCap[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
 
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
@@ -167,6 +191,10 @@ void applyPatches(LPVOID param) {
     if (invertVerticalLook) {
         patch((BYTE*)0x00406DB0, patchInvertVerticalLook, 1);
     }
+
+    if (removeFpsCap) {
+        patch((BYTE*)0x006589D7, patchRemoveFpsCap, 8);
+    }
 }
 
 DWORD WINAPI MainThread(LPVOID param) {
@@ -181,6 +209,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
     popupMenu = GetPrivateProfileIntA("CONFIG","popupMenu",0,configPath.c_str());
     invertVerticalLook = GetPrivateProfileIntA("CONFIG","invertVerticalLook",0,configPath.c_str());
+    removeFpsCap = GetPrivateProfileIntA("CONFIG","removeFpsCap",0,configPath.c_str());
     resW = reinterpret_cast<BYTE*>(&width);
     resH = reinterpret_cast<BYTE*>(&height);
 
@@ -188,14 +217,20 @@ DWORD WINAPI MainThread(LPVOID param) {
     DWORD hookAddressSetWindowPosPush = 0x67a9d0;
     DWORD hookAddressConsoleEnable = 0x66a2e7;
     DWORD hookAddressShowConsole = 0x005fbd0b;
+    DWORD hookAddressFpsFix1 = 0x005c6914;
+    DWORD hookAddressFpsFix2 = 0x005c6932;
     size_t hookLengthCursor = 6;
     size_t hookLengthSetWindowPosPush = 6;
     size_t hookLengthConsoleEnable = 6;
     size_t hookLengthShowConsole = 6;
+    size_t hookLengthFpsFix1 = 7;
+    size_t hookLengthFpsFix2 = 5;
     jmpBackAddressCursor = hookAddressCursor+hookLengthCursor;
     jmpBackAddressSetWindowPosPush = hookAddressSetWindowPosPush+hookLengthSetWindowPosPush;
     jmpBackAddressConsoleEnable = hookAddressConsoleEnable+hookLengthConsoleEnable;
     jmpBackAddressShowConsole = hookAddressShowConsole+hookLengthShowConsole;
+    jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
+    jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
     applyPatches(param);
     hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
     if (windowed && borderless) {
@@ -207,6 +242,8 @@ DWORD WINAPI MainThread(LPVOID param) {
         hook((void*)hookAddressConsoleEnable,hEnableConsole,hookLengthConsoleEnable);
         hook((void*)hookAddressShowConsole,hShowConsole,hookLengthShowConsole);
     }
+    hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
+    hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
     return 0;
 }
 
