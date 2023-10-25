@@ -37,7 +37,7 @@ By default, the game gets set to the resolution of your primary display. You can
 - Custom Screen Resolution:
   - Set the width and height in pixels using the 'width' and 'height' parameters.
 
-- Game Console: [OFF / ON]
+- Developer Console: [OFF / ON]
   - Shows/hides the console window.
 
 - Popup Menu: [OFF / ON]
