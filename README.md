@@ -9,7 +9,7 @@ RataTAR is a fork based on the currently inactive [taR](https://github.com/SabeM
 - Custom resolution
 - Windowed mode
 - Borderless mode
-- Game console
+- Developer console
 - Popup menu
 - Invert mouse on the Y-axis
 - Remove framerate cap
@@ -20,7 +20,7 @@ RataTAR is a fork based on the currently inactive [taR](https://github.com/SabeM
 
 ## Usage
 
-Download the latest version from the [Releases section](https://github.com/SplasBoi/RataTAR/releases)
+Download the latest version from the [Releases section](https://github.com/SplasBoi/RataTAR/releases).
 
 <p>Place taR.exe, hook.dll and taRconfig.ini in your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
 
