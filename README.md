@@ -12,6 +12,7 @@ RataTAR is a fork based on the currently inactive [taR](https://github.com/SabeM
 - Developer console
 - Popup menu
 - Invert mouse on the Y-axis
+- Custom Field Of View
 - Remove framerate cap
 - No CD patch
 
