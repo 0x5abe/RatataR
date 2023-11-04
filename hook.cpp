@@ -7,24 +7,24 @@ unsigned int width;
 float fov;
 float climbFOV;
 double runSlideFOV;
-bool borderless;
-bool windowed;
 bool console;
 bool popupMenu;
 bool invertVerticalLook;
 bool removeFpsCap;
 bool autoSave;
 bool speedrunMode;
+char buffer[256];
 BYTE* resW;
 BYTE* resH;
 BYTE* noCDDirectory;
 size_t noCDDirectorySize;
+std::string displayMode;
 
 bool hook(void *toHook, void *ourFunc, size_t len) {
     if (len < 5) {
         return false;
     }
-    
+
     DWORD curProtection;
     VirtualProtect(toHook, len, PAGE_EXECUTE_READWRITE, &curProtection);
 
@@ -163,7 +163,7 @@ void applyPatches(LPVOID param) {
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
     //Setting custom res
-    if (windowed) {
+    if (displayMode != "fullscreen") {
         patch((BYTE*)0x657e58, zero, 1);
         patch((BYTE*)0x657e5e, resW, 2);
         patch((BYTE*)0x657e65, resH, 2);
@@ -174,12 +174,12 @@ void applyPatches(LPVOID param) {
     patch((BYTE*)0x658d0a, zero, 1);
     patch((BYTE*)0x658d00, zero, 1);
     //Make game run windowed
-    if (windowed) {
+    if (displayMode != "fullscreen") {
         patch((BYTE*)0x674750, patchWindowed, 2);
     }
     //Set window position to top left corner
-    patch((BYTE*)0x67a9d9, borderless ? patchWindowPosBorderless : patchWindowPosBorder, 4);
-    if (windowed && borderless) {
+    patch((BYTE*)0x67a9d9, displayMode == "borderless" ? patchWindowPosBorderless : patchWindowPosBorder, 4);
+    if (displayMode == "borderless") {
         patch((BYTE*)0x67a9ef, patchBorderless, 1);
     }
     //Change directinput flag so windows key works
@@ -230,10 +230,9 @@ DWORD WINAPI MainThread(LPVOID param) {
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
     std::string rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("taRconfig.ini");
+    GetPrivateProfileStringA("CONFIG","displayMode","fullscreen",buffer,sizeof(buffer),configPath.c_str());
     width = GetPrivateProfileIntA("CONFIG","width",0,configPath.c_str());
     height = GetPrivateProfileIntA("CONFIG","height",0,configPath.c_str());
-    windowed = GetPrivateProfileIntA("CONFIG","windowed",0,configPath.c_str());
-    borderless = GetPrivateProfileIntA("CONFIG","borderless",0,configPath.c_str());
     console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
     popupMenu = GetPrivateProfileIntA("CONFIG","popupMenu",0,configPath.c_str());
     invertVerticalLook = GetPrivateProfileIntA("CONFIG","invertVerticalLook",0,configPath.c_str());
@@ -241,6 +240,14 @@ DWORD WINAPI MainThread(LPVOID param) {
     autoSave = GetPrivateProfileIntA("CONFIG","autoSave",1,configPath.c_str());
     fov = GetPrivateProfileIntA("CONFIG","fov",95,configPath.c_str());
     speedrunMode = GetPrivateProfileIntA("CONFIG","speedrunMode",0,configPath.c_str());
+
+    displayMode = buffer;
+    for (char& c : displayMode) {
+        c = std::tolower(c);
+    }
+    if (displayMode != "windowed" && displayMode != "borderless" && displayMode != "fullscreen") {
+        displayMode = "fullscreen";
+    }
 
     if (fov < 1 || fov > 155) fov = 95;
     climbFOV = (110.0f / 95.0f) * fov;
@@ -270,7 +277,6 @@ DWORD WINAPI MainThread(LPVOID param) {
     DWORD hookAddressShowConsole = 0x005fbd0b;
     DWORD hookAddressFpsFix1 = 0x005c6914;
     DWORD hookAddressFpsFix2 = 0x005c6932;
-    DWORD hookAddressNoCD = 0x00654F49;
     size_t hookLengthCursor = 6;
     size_t hookLengthSetWindowPosPush = 6;
     size_t hookLengthConsoleEnable = 6;
@@ -285,14 +291,15 @@ DWORD WINAPI MainThread(LPVOID param) {
     jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
     applyPatches(param);
     hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
-    if (windowed && borderless) {
+    if (displayMode == "borderless") {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
-    } else if (windowed) {
+    }
+    else if (displayMode != "fullscreen") {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
     }
     if (console) {
-        hook((void*)hookAddressConsoleEnable,hEnableConsole,hookLengthConsoleEnable);
-        hook((void*)hookAddressShowConsole,hShowConsole,hookLengthShowConsole);
+        hook((void*)hookAddressConsoleEnable, hEnableConsole, hookLengthConsoleEnable);
+        hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
     }
     hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
     hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
@@ -301,9 +308,9 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
-        case DLL_PROCESS_ATTACH:
-            CreateThread(0,0,MainThread,hModule,0,0);
-            break;
+    case DLL_PROCESS_ATTACH:
+        CreateThread(0,0,MainThread,hModule,0,0);
+        break;
     }
     return true;
 }
