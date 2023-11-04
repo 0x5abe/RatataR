@@ -1,9 +1,9 @@
-# RataTAR
+# RatataR
 
-RataTAR is a custom launcher for the PC version of Ratatouille.
+RatataR is a custom launcher for the PC version of Ratatouille.
 It currently supports overlay.exe for the USA version of Ratatouille.
 
-RataTAR is a fork based on the currently inactive [taR](https://github.com/SabeMP/taR).
+RatataR is a fork based on the currently inactive [taR](https://github.com/SabeMP/taR).
 
 ## List of features
 - Custom resolution
@@ -21,25 +21,26 @@ RataTAR is a fork based on the currently inactive [taR](https://github.com/SabeM
 
 ## Usage
 
-Download the latest version from the [Releases section](https://github.com/SplasBoi/RataTAR/releases).
+Download the latest version from the [Releases section](https://github.com/SplasBoi/RatataR/releases).
 
-<p>Place taR.exe, hook.dll and taRconfig.ini in your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
+<p>Unzip the files to your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
 
-Run taR.exe to launch the game with taR.
+Run taR.exe to launch the game with RatataR.
 
 By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the taRconfig.ini file with a text editor. The available options are:
+  
+- Window Mode:
+  - Windowed: The game runs in a window, allowing for seamless multitasking.
 
-- Windowed Mode: [OFF / ON]
-  - Toggles windowed mode.
+  - Fullscreen: Uses the game's native fullscreen mode to occupie the entire screen. May cause compatibility issues with screen capture software. Please be aware that the game's display resolution is determined by the settings configured in the gamesetup.exe graphics settings.
 
-- Borderless Mode: [OFF / ON]
-  - Toggles borderless mode (only available in windowed mode).
+  - Borderless: The game operates within a window but with no borders, providing the illusion of fullscreen while retaining the ability to easily multitask.
 
-- Custom Screen Resolution:
+- Screen Resolution:
   - Set the width and height in pixels using the 'width' and 'height' parameters.
 
 - Developer Console: [OFF / ON]
-  - Shows/hides the console window.
+  - Show/hide the console window.
 
 - Popup Menu: [OFF / ON]
   - Toggles the popup menu, accessible with a right-click.
