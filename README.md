@@ -1,41 +1,68 @@
-# taR
+# RatataR
 
-taR is a custom launcher for the PC version of Ratatouille.
+RatataR is a custom launcher for the PC version of Ratatouille.
 It currently supports overlay.exe for the USA version of Ratatouille.
 
-## List of features
+RatataR is a fork based on the currently inactive [taR](https://github.com/SabeMP/taR).
 
+## List of features
 - Custom resolution
 - Windowed mode
 - Borderless mode
+- Developer console
+- Popup menu
+- Invert mouse on the Y-axis
+- Custom Field Of View
+- Remove framerate cap
+- No CD patch
 
 ### Planned features
-
-- Fps limiter
-- Fps counter
+- A father
 
 ## Usage
 
-- Download the latest version from the [Releases section](https://github.com/CMebaS/taR/releases)
+Download the latest version from the [Releases section](https://github.com/SplasBoi/RatataR/releases).
 
-- Place taR.exe, hook.dll and taRconfig.ini in your Ratatouille game folder.
+<p>Unzip the files to your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
 
-- By default the game is set to 1920x1080 and fullscreen. You can set your options by editing taRconfig.ini with any text editor. The available options are:
+Run taR.exe to launch the game with RatataR.
 
-- windowed=0 / windowed=1 --> toggles windowd mode
+By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the taRconfig.ini file with a text editor. The available options are:
+  
+- Window Mode:
+  - Windowed: The game runs in a window, allowing for seamless multitasking.
 
-- borderless=0 / borderless=1 --> toggles borderless mode (only available with windowed on as well)
+  - Fullscreen: Uses the game's native fullscreen mode to occupie the entire screen. May cause compatibility issues with screen capture software. Please be aware that the game's display resolution is determined by the settings configured in the gamesetup.exe graphics settings.
 
-- console=0 / console=1 --> toggles the console window
+  - Borderless: The game operates within a window but with no borders, providing the illusion of fullscreen while retaining the ability to easily multitask.
 
-- popupMenu=0 / popupMenu=1 --> toggles popup menu (open with right click)
+- Screen Resolution:
+  - Set the width and height in pixels using the 'width' and 'height' parameters.
 
-- invertVerticalLook=0 / invertVerticalLook=1 --> inverts the mouse Y Axis
+- Developer Console: [OFF / ON]
+  - Show/hide the console window.
 
-- removeFpsCap=0 / removeFpsCap=1 --> removes the 500 fps cap the game enforces
+- Popup Menu: [OFF / ON]
+  - Toggles the popup menu, accessible with a right-click.
 
-- width={number} --> to set the width in pixels of the game
+- Invert Vertical Look: [OFF / ON]
+  - Inverts the mouse Y-axis.
 
-- height={number} --> to set the height in pixels of the game
+- Auto Save: [OFF / ON]
+  - Toggles the games autosaving feature.
 
-- Run taR.exe to launch the game with taR.
+- Field Of View: [1-155]
+  - Adjust the field of view.
+
+- Remove FPS Cap: [OFF / ON]
+  - Removes the 500 fps cap enforced by the game.
+
+- Speedrun Mode: [OFF / ON]
+  - Disables modifications that are not legal for speedrunning.
+
+### No disc patch
+1. If you have multiple discs, mount/insert the second game disc.
+2. Open File Explorer.
+3. Navigate to the "RAT2" disc.
+4. Go to the "View" tab and select "Show" and then "Hidden Items."
+5. Copy the "MUSIC" and "VIDEOS" folders into your Ratatouille game folder.
