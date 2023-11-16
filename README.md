@@ -3,8 +3,6 @@
 RatataR is a custom launcher for the PC version of Ratatouille.
 It currently supports overlay.exe for the USA version of Ratatouille.
 
-RatataR is a fork based on the currently inactive [taR](https://github.com/SabeMP/taR).
-
 ## List of features
 - Custom resolution
 - Windowed mode
@@ -15,17 +13,21 @@ RatataR is a fork based on the currently inactive [taR](https://github.com/SabeM
 - Custom Field Of View
 - Remove framerate cap
 - No CD patch
+- Auto save toggle
+- Speedrun mode
 
 ### Planned features
-- A father
+- Support for other versions of the game
+- Overall rewrite of the tool using minhook, for more extensive modding
+- Fps counter and limiter
 
 ## Usage
 
-Download the latest version from the [Releases section](https://github.com/SplasBoi/RatataR/releases).
+Download the latest version from the [Releases section](https://github.com/SabeMP/RatataR/releases).
 
 <p>Unzip the files to your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
 
-Run taR.exe to launch the game with RatataR.
+Run RatataR.exe to launch the game with RatataR.
 
 By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the taRconfig.ini file with a text editor. The available options are:
   
