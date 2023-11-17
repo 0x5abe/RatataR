@@ -29,7 +29,7 @@ Download the latest version from the [Releases section](https://github.com/SabeM
 
 Run RatataR.exe to launch the game with RatataR.
 
-By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the taRconfig.ini file with a text editor. The available options are:
+By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the RatataRconfig.ini file with a text editor. The available options are:
   
 - Window Mode:
   - Windowed: The game runs in a window, allowing for seamless multitasking.

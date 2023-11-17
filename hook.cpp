@@ -229,7 +229,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     GetModuleFileNameA((HMODULE)param, (LPSTR)moduleFileName, MAX_PATH);
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
     std::string rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
-    std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("taRconfig.ini");
+    std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
     GetPrivateProfileStringA("CONFIG","displayMode","fullscreen",buffer,sizeof(buffer),configPath.c_str());
     width = GetPrivateProfileIntA("CONFIG","width",0,configPath.c_str());
     height = GetPrivateProfileIntA("CONFIG","height",0,configPath.c_str());
