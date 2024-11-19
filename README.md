@@ -14,6 +14,9 @@ It currently supports overlay.exe for the USA version of Ratatouille.
 - Remove framerate cap
 - No CD patch
 - Auto save toggle
+- Disable bonking
+- Fog toggle
+- Visual improvements
 - Speedrun mode
 
 ### Planned features
@@ -39,7 +42,13 @@ By default, the game gets set to the resolution of your primary display. You can
   - Borderless: The game operates within a window but with no borders, providing the illusion of fullscreen while retaining the ability to easily multitask.
 
 - Screen Resolution:
-  - Set the width and height in pixels using the 'width' and 'height' parameters.
+  - Set the width and height in pixels using the **width** and **height** parameters.
+
+- Improved View Distance: [OFF / ON]
+  - Greatly enhances the render distance and forces max lod on all meshes. This can heavily impact performance due to the game being very cpu bound.
+
+- Fog: [OFF / ON]
+  - Toggle the fog.
 
 - Developer Console: [OFF / ON]
   - Show/hide the console window.
@@ -59,6 +68,9 @@ By default, the game gets set to the resolution of your primary display. You can
 - Remove FPS Cap: [OFF / ON]
   - Removes the 500 fps cap enforced by the game.
 
+- No Bonks: [OFF / ON]
+  - Disable the bonks that occurs when dashing.
+
 - Speedrun Mode: [OFF / ON]
   - Disables modifications that are not legal for speedrunning.
 
@@ -67,4 +79,4 @@ By default, the game gets set to the resolution of your primary display. You can
 2. Open File Explorer.
 3. Navigate to the "RAT2" disc.
 4. Go to the "View" tab and select "Show" and then "Hidden Items."
-5. Copy the "MUSIC" and "VIDEOS" folders into your Ratatouille game folder.
+5. Copy the "MUSIC" and "VIDEOS" folders into the root of the game folder.

@@ -12,6 +12,9 @@ bool popupMenu;
 bool invertVerticalLook;
 bool removeFpsCap;
 bool autoSave;
+bool improvedViewDistance;
+bool fog;
+bool noBonks;
 bool speedrunMode;
 char buffer[256];
 BYTE* resW;
@@ -147,18 +150,14 @@ void patch(BYTE* ptr, BYTE* buf, size_t len) {
 }
 
 void applyPatches(LPVOID param) {
-    BYTE zero[] = {0x00};
+    BYTE zero[] = {0x00,0x00,0x00,0x00};
+    BYTE jmp[] = {0xEB};
+    BYTE nop[] = {0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90};
     BYTE patchCursorHide[] = {0x66,0x81,0x7c,0x24,0x18,0x01,0x00,0x75};
     BYTE patchWindowed[] = {0xfe,0x85};
     BYTE patchWindowPosBorder[] = {0xfe,0xff,0xff,0xff};
-    BYTE patchWindowPosBorderless[] = {0x00,0x00,0x00,0x00};
     BYTE patchBorderless[] = {0x0a};
     BYTE patchWindowKey[] = {0x06};
-    BYTE patchConsole[] = {0x90, 0x90, 0x90};
-    BYTE patchPopupMenu0[] = {0x90, 0x90};
-    BYTE patchPopupMenu1[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
-    BYTE patchInvertVerticalLook[] = {0x01};
-    BYTE patchRemoveFpsCap[] = {0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
 
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
@@ -178,49 +177,93 @@ void applyPatches(LPVOID param) {
         patch((BYTE*)0x674750, patchWindowed, 2);
     }
     //Set window position to top left corner
-    patch((BYTE*)0x67a9d9, displayMode == "borderless" ? patchWindowPosBorderless : patchWindowPosBorder, 4);
+    patch((BYTE*)0x67a9d9, displayMode == "borderless" ? zero : patchWindowPosBorder, 4);
     if (displayMode == "borderless") {
         patch((BYTE*)0x67a9ef, patchBorderless, 1);
     }
     //Change directinput flag so windows key works
     patch((BYTE*)0x6a91c6, patchWindowKey, 1);
 
-    //BYPASS DISC REQUIREMENT
-    patch((BYTE*)0x00654F52, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
-    patch((BYTE*)0x00654FD7, (BYTE*)"\x90\x90", 2);
-    patch((BYTE*)0x00655015, (BYTE*)"\xEB", 1);
-    //MUSIC & VIDEO DIRECTORY
+    //Bypass disc requirement
+    patch((BYTE*)0x00654F52, nop, 6);
+    patch((BYTE*)0x00654FD7, nop, 2);
+    patch((BYTE*)0x00655015, jmp, 1);
+
+    //Music & video directory
     patch((BYTE*)0x007DF135, noCDDirectory, noCDDirectorySize);
-    patch((BYTE*)0x00654D8D, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
+    //Stop directory from being overwritten
+    patch((BYTE*)0x00654D8D, nop, 6);
 
-    if (!speedrunMode) {
-        //Apply FOV
-        patch((BYTE*)0x00580C7C, (BYTE*)"\xEB", 1); //BYPASS FOV OVERFLOW ERROR
-        patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&fov), sizeof(float));
-        patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&climbFOV), sizeof(float));
-        patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&runSlideFOV), sizeof(double));
+    //Allow invalid save names
+    patch((BYTE*)0x004E8F5A, jmp, 1);
 
-        //Enable console
-        if (console) {
-            patch((BYTE*)0x0066A2E4, patchConsole, 3);
-        }
+    //Allow entering blank save name
+    patch((BYTE*)0x00557AAA, jmp, 1);
 
-        if (popupMenu) {
-            patch((BYTE*)0x00670983, patchPopupMenu0, 2);
-            patch((BYTE*)0x00674738, patchPopupMenu1, 6);
-        }
-
-        if (removeFpsCap) {
-            patch((BYTE*)0x006589D7, patchRemoveFpsCap, 8);
-        }
-    }
+    //Allow multiple game instances
+    patch((BYTE*)0x00656367, jmp, 1);
+    patch((BYTE*)0x00656386, nop, 2);
 
     if (invertVerticalLook) {
-        patch((BYTE*)0x00406DB0, patchInvertVerticalLook, 1);
+        patch((BYTE*)0x00406DB4, (BYTE*)"\x75", 1);
     }
 
     if (!autoSave) {
-        patch((BYTE*)0x00559A04, (BYTE*)"\x00", 1);
+        patch((BYTE*)0x005599F8, nop, 13);
+    }
+
+    if (speedrunMode) {
+        return;
+    }
+
+    //Apply FOV
+    patch((BYTE*)0x00580C7C, jmp, 1); //BYPASS FOV OVERFLOW ERROR
+    patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&fov), sizeof(float));
+    patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&climbFOV), sizeof(float));
+    patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&runSlideFOV), sizeof(double));
+
+    if (improvedViewDistance) {
+        //Use default far value
+        patch((BYTE*)0x00402326, nop, 2);
+        patch((BYTE*)0x00402337, nop, 2);
+        //Set default far value to 500
+        patch((BYTE*)0x0070A5B0, (BYTE*)"\x00\x00\xFA\x43", 4);
+
+        //Remove culling
+        patch((BYTE*)0x00678FD3, jmp, 1);
+        patch((BYTE*)0x00678FB1, nop, 6);
+        patch((BYTE*)0x006175D2, nop, 2);
+        patch((BYTE*)0x006175DF, nop, 2);
+        patch((BYTE*)0x006EDB57, nop, 2);
+        patch((BYTE*)0x006EDB61, nop, 2);
+
+        //Force max Lod
+        patch((BYTE*)0x00617655, jmp, 1);
+
+        //Remove item freezing
+        patch((BYTE*)0x0049CA91, jmp, 1);
+    }
+
+    if (!fog) {
+        patch((BYTE*)0x00678593, (BYTE*)"\xE9\x8F\x00\x00\x00\x90", 6);
+    }
+
+    if (noBonks) {
+        patch((BYTE*)0x0043dd76, (BYTE*)"\xE9\x16\x01\x00\x00\x90", 6);
+    }
+    
+    //Enable console
+    if (console) {
+        patch((BYTE*)0x0066A2E4, nop, 3);
+    }
+
+    if (popupMenu) {
+        patch((BYTE*)0x00670983, nop, 2);
+        patch((BYTE*)0x00674738, nop, 6);
+    }
+
+    if (removeFpsCap) {
+        patch((BYTE*)0x006589D7, nop, 8);
     }
 }
 
@@ -230,7 +273,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
     std::string rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
-    GetPrivateProfileStringA("CONFIG","displayMode","fullscreen",buffer,sizeof(buffer),configPath.c_str());
+    GetPrivateProfileStringA("CONFIG","displayMode","borderless",buffer,sizeof(buffer),configPath.c_str());
     width = GetPrivateProfileIntA("CONFIG","width",0,configPath.c_str());
     height = GetPrivateProfileIntA("CONFIG","height",0,configPath.c_str());
     console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
@@ -239,6 +282,9 @@ DWORD WINAPI MainThread(LPVOID param) {
     removeFpsCap = GetPrivateProfileIntA("CONFIG","removeFpsCap",0,configPath.c_str());
     autoSave = GetPrivateProfileIntA("CONFIG","autoSave",1,configPath.c_str());
     fov = GetPrivateProfileIntA("CONFIG","fov",95,configPath.c_str());
+    improvedViewDistance = GetPrivateProfileIntA("CONFIG","improvedViewDistance",0,configPath.c_str());
+    fog = GetPrivateProfileIntA("CONFIG","fog",1,configPath.c_str());
+    noBonks = GetPrivateProfileIntA("CONFIG","noBonks",0,configPath.c_str());
     speedrunMode = GetPrivateProfileIntA("CONFIG","speedrunMode",0,configPath.c_str());
 
     displayMode = buffer;
@@ -246,16 +292,15 @@ DWORD WINAPI MainThread(LPVOID param) {
         c = std::tolower(c);
     }
     if (displayMode != "windowed" && displayMode != "borderless" && displayMode != "fullscreen") {
-        displayMode = "fullscreen";
+        displayMode = "borderless";
     }
-
+    
     if (fov < 1 || fov > 155) fov = 95;
     climbFOV = (110.0f / 95.0f) * fov;
     runSlideFOV = (110.0 / 95.0) * fov;
-
+    
     noCDDirectory = new BYTE[rootDirectory.length()];
     noCDDirectorySize = rootDirectory.length();
-
     for (size_t i = 0; i < rootDirectory.length(); ++i) {
         noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
     }
