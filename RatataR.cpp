@@ -39,5 +39,8 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
             }
         }
     }
+    else {
+        MessageBoxA(NULL, "Failed to initialize.", "RatataR", MB_OK | MB_ICONERROR);
+    }
     return 0;
 }
