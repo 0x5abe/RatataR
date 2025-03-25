@@ -16,7 +16,6 @@ bool improvedViewDistance;
 bool fog;
 bool noBonks;
 bool speedrunMode;
-char buffer[256];
 BYTE* resW;
 BYTE* resH;
 BYTE* noCDDirectory;
@@ -191,6 +190,8 @@ void applyPatches(LPVOID param) {
 
     //Music & video directory
     patch((BYTE*)0x007DF135, noCDDirectory, noCDDirectorySize);
+    delete[] noCDDirectory;
+
     //Stop directory from being overwritten
     patch((BYTE*)0x00654D8D, nop, 6);
 
@@ -212,6 +213,7 @@ void applyPatches(LPVOID param) {
         patch((BYTE*)0x005599F8, nop, 13);
     }
 
+    // Place speedrun illegal patches down below
     if (speedrunMode) {
         return;
     }
@@ -273,24 +275,29 @@ DWORD WINAPI MainThread(LPVOID param) {
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
     std::string rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
-    GetPrivateProfileStringA("CONFIG","displayMode","borderless",buffer,sizeof(buffer),configPath.c_str());
-    width = GetPrivateProfileIntA("CONFIG","width",0,configPath.c_str());
-    height = GetPrivateProfileIntA("CONFIG","height",0,configPath.c_str());
-    console = GetPrivateProfileIntA("CONFIG","console",0,configPath.c_str());
-    popupMenu = GetPrivateProfileIntA("CONFIG","popupMenu",0,configPath.c_str());
-    invertVerticalLook = GetPrivateProfileIntA("CONFIG","invertVerticalLook",0,configPath.c_str());
-    removeFpsCap = GetPrivateProfileIntA("CONFIG","removeFpsCap",0,configPath.c_str());
-    autoSave = GetPrivateProfileIntA("CONFIG","autoSave",1,configPath.c_str());
-    fov = GetPrivateProfileIntA("CONFIG","fov",95,configPath.c_str());
-    improvedViewDistance = GetPrivateProfileIntA("CONFIG","improvedViewDistance",0,configPath.c_str());
-    fog = GetPrivateProfileIntA("CONFIG","fog",1,configPath.c_str());
-    noBonks = GetPrivateProfileIntA("CONFIG","noBonks",0,configPath.c_str());
-    speedrunMode = GetPrivateProfileIntA("CONFIG","speedrunMode",0,configPath.c_str());
 
-    displayMode = buffer;
-    for (char& c : displayMode) {
-        c = std::tolower(c);
+    const char* sectionName = "CONFIG";
+
+    width = GetPrivateProfileIntA(sectionName,"width",0,configPath.c_str());
+    height = GetPrivateProfileIntA(sectionName,"height",0,configPath.c_str());
+    console = GetPrivateProfileIntA(sectionName,"console",0,configPath.c_str());
+    popupMenu = GetPrivateProfileIntA(sectionName,"popupMenu",0,configPath.c_str());
+    invertVerticalLook = GetPrivateProfileIntA(sectionName,"invertVerticalLook",0,configPath.c_str());
+    removeFpsCap = GetPrivateProfileIntA(sectionName,"removeFpsCap",0,configPath.c_str());
+    autoSave = GetPrivateProfileIntA(sectionName,"autoSave",1,configPath.c_str());
+    fov = (float)GetPrivateProfileIntA(sectionName,"fov",95,configPath.c_str());
+    improvedViewDistance = GetPrivateProfileIntA(sectionName,"improvedViewDistance",0,configPath.c_str());
+    fog = GetPrivateProfileIntA(sectionName,"fog",1,configPath.c_str());
+    noBonks = GetPrivateProfileIntA(sectionName,"noBonks",0,configPath.c_str());
+    speedrunMode = GetPrivateProfileIntA(sectionName,"speedrunMode",0,configPath.c_str());
+
+    char buffer[32];
+    GetPrivateProfileStringA(sectionName, "displayMode", "borderless", buffer, sizeof(buffer), configPath.c_str());
+    for (size_t i = 0; i < sizeof(buffer) && buffer[i] != '\0'; i++) {
+        buffer[i] = std::tolower(buffer[i]);
     }
+    displayMode = buffer;
+
     if (displayMode != "windowed" && displayMode != "borderless" && displayMode != "fullscreen") {
         displayMode = "borderless";
     }
@@ -299,11 +306,13 @@ DWORD WINAPI MainThread(LPVOID param) {
     climbFOV = (110.0f / 95.0f) * fov;
     runSlideFOV = (110.0 / 95.0) * fov;
     
-    noCDDirectory = new BYTE[rootDirectory.length()];
-    noCDDirectorySize = rootDirectory.length();
+    noCDDirectorySize = rootDirectory.length() + 1;
+    noCDDirectory = new BYTE[noCDDirectorySize];
+    
     for (size_t i = 0; i < rootDirectory.length(); ++i) {
         noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
     }
+    noCDDirectory[rootDirectory.length()] = '\0';
 
     if (width == 0) {
         width = GetSystemMetrics(SM_CXSCREEN);
