@@ -1,7 +1,6 @@
 #include <iostream>
 #include <Windows.h>
 #include <TlHelp32.h>
-
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     const char* dllName = "hook.dll";
     const char* processName = "overlay.exe";

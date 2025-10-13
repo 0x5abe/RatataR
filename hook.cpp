@@ -1,12 +1,13 @@
 #include <Windows.h>
 #include <iostream>
 #include <timeapi.h>
-
+#include "rich-presence/rpc.h"
 unsigned int height;
 unsigned int width;
 float fov;
 float climbFOV;
 double runSlideFOV;
+bool rpc;
 bool console;
 bool popupMenu;
 bool invertVerticalLook;
@@ -280,6 +281,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 
     width = GetPrivateProfileIntA(sectionName,"width",0,configPath.c_str());
     height = GetPrivateProfileIntA(sectionName,"height",0,configPath.c_str());
+    rpc = GetPrivateProfileIntA(sectionName,"discordRPC",1,configPath.c_str());
     console = GetPrivateProfileIntA(sectionName,"console",0,configPath.c_str());
     popupMenu = GetPrivateProfileIntA(sectionName,"popupMenu",0,configPath.c_str());
     invertVerticalLook = GetPrivateProfileIntA(sectionName,"invertVerticalLook",0,configPath.c_str());
@@ -302,6 +304,10 @@ DWORD WINAPI MainThread(LPVOID param) {
         displayMode = "borderless";
     }
     
+    if (rpc) {
+        CreateThread(0, 0, InitRPC, 0, 0, 0);
+    }
+
     if (fov < 1 || fov > 155) fov = 95;
     climbFOV = (110.0f / 95.0f) * fov;
     runSlideFOV = (110.0 / 95.0) * fov;
