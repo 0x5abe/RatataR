@@ -2,25 +2,149 @@
 #include <iostream>
 #include <timeapi.h>
 
-unsigned int height;
-unsigned int width;
-float fov;
-float climbFOV;
-double runSlideFOV;
-bool console;
-bool popupMenu;
-bool invertVerticalLook;
-bool removeFpsCap;
-bool autoSave;
-bool improvedViewDistance;
-bool fog;
-bool noBonks;
-bool speedrunMode;
-BYTE* resW;
-BYTE* resH;
-BYTE* noCDDirectory;
-size_t noCDDirectorySize;
-std::string displayMode;
+enum DisplayModes {
+    Windowed,
+    Borderless,
+    Fullscreen
+};
+
+struct RatataRConfig {
+    unsigned int width;
+    unsigned int height;
+    float fov;
+    float climbFOV;
+    double runSlideFOV;
+    bool console;
+    bool popupMenu;
+    bool invertVerticalLook;
+    bool removeFpsCap;
+    bool autoSave;
+    bool improvedViewDistance;
+    bool fog;
+    bool noBonks;
+    bool speedrunMode;
+    DisplayModes displayMode;
+};
+
+DisplayModes parseDisplayMode(const char* value) {
+    if (strcmp(value, "WINDOWED") == 0) return Windowed;
+    if (strcmp(value, "FULLSCREEN") == 0) return Fullscreen;
+    return Borderless;
+}
+
+struct IntOption {
+    const char* key;
+    unsigned int RatataRConfig::* member;
+    int def;
+};
+
+struct BoolOption {
+    const char* key;
+    bool RatataRConfig::* member;
+    bool def;
+};
+
+struct FloatOption {
+    const char* key;
+    float RatataRConfig::* member;
+    int def;
+};
+
+void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
+    const char* sectionName = "CONFIG";
+
+    IntOption intOptions[] = {
+        {"width", &RatataRConfig::width, 0},
+        {"height", &RatataRConfig::height, 0},
+    };
+
+    BoolOption boolOptions[] = {
+        {"console",                     &RatataRConfig::console,                       false},
+        {"popupMenu",                   &RatataRConfig::popupMenu,                     false},
+        {"invertVerticalLook",          &RatataRConfig::invertVerticalLook,            false},
+        {"removeFpsCap",                &RatataRConfig::removeFpsCap,                  false},
+        {"autoSave",                    &RatataRConfig::autoSave,                      true},
+        {"improvedViewDistance",        &RatataRConfig::improvedViewDistance,          false},
+        {"fog",                         &RatataRConfig::fog,                           true},
+        {"noBonks",                     &RatataRConfig::noBonks,                       false},
+        {"speedrunMode",                &RatataRConfig::speedrunMode,                  false},
+    };
+    
+    FloatOption floatOptions[] = {
+        {"fov", &RatataRConfig::fov, 95},
+    };
+
+    // Get int options
+    for (const auto& opt : intOptions) {
+        cfg.*(opt.member) = GetPrivateProfileIntA(
+            sectionName,
+            opt.key,
+            opt.def,
+            configPath.c_str()
+        );
+    }
+
+    // Get boolean options
+    for (const auto& opt : boolOptions) {
+        cfg.*(opt.member) = GetPrivateProfileIntA(
+            sectionName,
+            opt.key,
+            opt.def ? 1 : 0,
+            configPath.c_str()
+        ) != 0;
+    }
+
+    // Get float options
+    for (const auto& opt : floatOptions) {
+        cfg.*(opt.member) = static_cast<float>(
+            GetPrivateProfileIntA(
+                sectionName,
+                opt.key,
+                opt.def,
+                configPath.c_str()
+            )
+        );
+    }
+
+    // Get display mode
+    char displayModeBuffer[32];
+    GetPrivateProfileStringA(
+        sectionName,
+        "displayMode",
+        "BORDERLESS",
+        displayModeBuffer,
+        sizeof(displayModeBuffer),
+        configPath.c_str()
+    );
+
+    for (size_t i = 0; displayModeBuffer[i] != '\0'; i++) {
+        displayModeBuffer[i] = static_cast<char>(
+            std::toupper(static_cast<unsigned char>(displayModeBuffer[i]))
+        );
+    }
+
+    cfg.displayMode = parseDisplayMode(displayModeBuffer);
+
+    // Clamp FOV between 1 and 155
+    if (cfg.fov < 1.0f) cfg.fov = 1.0f;
+    else if (cfg.fov > 155.0f) cfg.fov = 155.0f;
+    
+    // Update dependent values
+    cfg.climbFOV = (110.0f / 95.0f) * cfg.fov;
+    cfg.runSlideFOV = (110.0 / 95.0) * cfg.fov;
+
+    // Set to screen resolution if width is 0
+    if (cfg.width == 0) {
+        cfg.width = GetSystemMetrics(SM_CXSCREEN);
+    }
+
+    // Set to screen resolution if height is 0
+    if (cfg.height == 0) {
+        cfg.height = GetSystemMetrics(SM_CYSCREEN);
+    }
+}
+
+std::string rootDirectory;
 
 bool hook(void *toHook, void *ourFunc, size_t len) {
     if (len < 5) {
@@ -148,7 +272,7 @@ void patch(BYTE* ptr, BYTE* buf, size_t len) {
     VirtualProtect(ptr, len, curProtection, &curProtection);
 }
 
-void applyPatches(LPVOID param) {
+void applyPatches(LPVOID param, RatataRConfig& cfg) {
     BYTE zero[] = {0x00,0x00,0x00,0x00};
     BYTE jmp[] = {0xEB};
     BYTE nop[] = {0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90};
@@ -161,10 +285,10 @@ void applyPatches(LPVOID param) {
     //Cursor only gets hidden when inside client area
     patch((BYTE*)0x654711, patchCursorHide, 8);
     //Setting custom res
-    if (displayMode != "fullscreen") {
+    if (cfg.displayMode != DisplayModes::Fullscreen) {
         patch((BYTE*)0x657e58, zero, 1);
-        patch((BYTE*)0x657e5e, resW, 2);
-        patch((BYTE*)0x657e65, resH, 2);
+        patch((BYTE*)0x657e5e, reinterpret_cast<BYTE*>(&cfg.width), 2);
+        patch((BYTE*)0x657e65, reinterpret_cast<BYTE*>(&cfg.height), 2);
     }
     //Initial window position
     patch((BYTE*)0x658d05, zero, 1);
@@ -172,12 +296,12 @@ void applyPatches(LPVOID param) {
     patch((BYTE*)0x658d0a, zero, 1);
     patch((BYTE*)0x658d00, zero, 1);
     //Make game run windowed
-    if (displayMode != "fullscreen") {
+    if (cfg.displayMode != DisplayModes::Fullscreen) {
         patch((BYTE*)0x674750, patchWindowed, 2);
     }
     //Set window position to top left corner
-    patch((BYTE*)0x67a9d9, displayMode == "borderless" ? zero : patchWindowPosBorder, 4);
-    if (displayMode == "borderless") {
+    patch((BYTE*)0x67a9d9, cfg.displayMode == DisplayModes::Borderless ? zero : patchWindowPosBorder, 4);
+    if (cfg.displayMode == DisplayModes::Borderless) {
         patch((BYTE*)0x67a9ef, patchBorderless, 1);
     }
     //Change directinput flag so windows key works
@@ -189,7 +313,15 @@ void applyPatches(LPVOID param) {
     patch((BYTE*)0x00655015, jmp, 1);
 
     //Music & video directory
+    size_t noCDDirectorySize = rootDirectory.length() + 1;
+    BYTE* noCDDirectory = new BYTE[noCDDirectorySize];
+
+    for (size_t i = 0; i < rootDirectory.length(); ++i) {
+        noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
+    }
+    noCDDirectory[rootDirectory.length()] = '\0';
     patch((BYTE*)0x007DF135, noCDDirectory, noCDDirectorySize);
+
     delete[] noCDDirectory;
 
     //Stop directory from being overwritten
@@ -205,67 +337,65 @@ void applyPatches(LPVOID param) {
     patch((BYTE*)0x00656367, jmp, 1);
     patch((BYTE*)0x00656386, nop, 2);
 
-    if (invertVerticalLook) {
+    if (cfg.invertVerticalLook) {
         patch((BYTE*)0x00406DB4, (BYTE*)"\x75", 1);
     }
 
-    if (!autoSave) {
+    if (!cfg.autoSave) {
         patch((BYTE*)0x005599F8, nop, 13);
     }
 
-    // Place speedrun illegal patches down below
-    if (speedrunMode) {
-        return;
-    }
+    // Speedrun mode only patches
+    if (!cfg.speedrunMode) {
+        //Apply FOV
+        patch((BYTE*)0x00580C7C, jmp, 1); //BYPASS FOV OVERFLOW ERROR
+        patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&cfg.fov), sizeof(float));
+        patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&cfg.climbFOV), sizeof(float));
+        patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&cfg.runSlideFOV), sizeof(double));
 
-    //Apply FOV
-    patch((BYTE*)0x00580C7C, jmp, 1); //BYPASS FOV OVERFLOW ERROR
-    patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&fov), sizeof(float));
-    patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&climbFOV), sizeof(float));
-    patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&runSlideFOV), sizeof(double));
+        if (cfg.improvedViewDistance) {
+            //Use default far value
+            patch((BYTE*)0x00402326, nop, 2);
+            patch((BYTE*)0x00402337, nop, 2);
+            //Set default far value to 500
+            patch((BYTE*)0x0070A5B0, (BYTE*)"\x00\x00\xFA\x43", 4);
 
-    if (improvedViewDistance) {
-        //Use default far value
-        patch((BYTE*)0x00402326, nop, 2);
-        patch((BYTE*)0x00402337, nop, 2);
-        //Set default far value to 500
-        patch((BYTE*)0x0070A5B0, (BYTE*)"\x00\x00\xFA\x43", 4);
+            //Remove culling
+            patch((BYTE*)0x00678FD3, jmp, 1);
+            patch((BYTE*)0x00678FB1, nop, 6);
+            patch((BYTE*)0x006175D2, nop, 2);
+            patch((BYTE*)0x006175DF, nop, 2);
+            patch((BYTE*)0x006EDB57, nop, 2);
+            patch((BYTE*)0x006EDB61, nop, 2);
 
-        //Remove culling
-        patch((BYTE*)0x00678FD3, jmp, 1);
-        patch((BYTE*)0x00678FB1, nop, 6);
-        patch((BYTE*)0x006175D2, nop, 2);
-        patch((BYTE*)0x006175DF, nop, 2);
-        patch((BYTE*)0x006EDB57, nop, 2);
-        patch((BYTE*)0x006EDB61, nop, 2);
+            //Force max Lod
+            patch((BYTE*)0x00617655, jmp, 1);
 
-        //Force max Lod
-        patch((BYTE*)0x00617655, jmp, 1);
+            //Remove item freezing
+            patch((BYTE*)0x0049CA91, jmp, 1);
+        }
 
-        //Remove item freezing
-        patch((BYTE*)0x0049CA91, jmp, 1);
-    }
+        if (!cfg.fog) {
+            patch((BYTE*)0x00678593, (BYTE*)"\xE9\x8F\x00\x00\x00\x90", 6);
+        }
 
-    if (!fog) {
-        patch((BYTE*)0x00678593, (BYTE*)"\xE9\x8F\x00\x00\x00\x90", 6);
-    }
+        if (cfg.noBonks) {
+            patch((BYTE*)0x0043dd76, (BYTE*)"\xE9\x16\x01\x00\x00\x90", 6);
+        }
 
-    if (noBonks) {
-        patch((BYTE*)0x0043dd76, (BYTE*)"\xE9\x16\x01\x00\x00\x90", 6);
-    }
-    
-    //Enable console
-    if (console) {
-        patch((BYTE*)0x0066A2E4, nop, 3);
-    }
+        //Enable console
+        if (cfg.console) {
+            patch((BYTE*)0x0066A2E4, nop, 3);
+        }
 
-    if (popupMenu) {
-        patch((BYTE*)0x00670983, nop, 2);
-        patch((BYTE*)0x00674738, nop, 6);
-    }
+        if (cfg.popupMenu) {
+            patch((BYTE*)0x00670983, nop, 2);
+            patch((BYTE*)0x00674738, nop, 6);
+        }
 
-    if (removeFpsCap) {
-        patch((BYTE*)0x006589D7, nop, 8);
+        if (cfg.removeFpsCap) {
+            patch((BYTE*)0x006589D7, nop, 8);
+        }
     }
 }
 
@@ -273,57 +403,11 @@ DWORD WINAPI MainThread(LPVOID param) {
     TCHAR moduleFileName[MAX_PATH];
     GetModuleFileNameA((HMODULE)param, (LPSTR)moduleFileName, MAX_PATH);
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
-    std::string rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
+    rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
 
-    const char* sectionName = "CONFIG";
-
-    width = GetPrivateProfileIntA(sectionName,"width",0,configPath.c_str());
-    height = GetPrivateProfileIntA(sectionName,"height",0,configPath.c_str());
-    console = GetPrivateProfileIntA(sectionName,"console",0,configPath.c_str());
-    popupMenu = GetPrivateProfileIntA(sectionName,"popupMenu",0,configPath.c_str());
-    invertVerticalLook = GetPrivateProfileIntA(sectionName,"invertVerticalLook",0,configPath.c_str());
-    removeFpsCap = GetPrivateProfileIntA(sectionName,"removeFpsCap",0,configPath.c_str());
-    autoSave = GetPrivateProfileIntA(sectionName,"autoSave",1,configPath.c_str());
-    fov = (float)GetPrivateProfileIntA(sectionName,"fov",95,configPath.c_str());
-    improvedViewDistance = GetPrivateProfileIntA(sectionName,"improvedViewDistance",0,configPath.c_str());
-    fog = GetPrivateProfileIntA(sectionName,"fog",1,configPath.c_str());
-    noBonks = GetPrivateProfileIntA(sectionName,"noBonks",0,configPath.c_str());
-    speedrunMode = GetPrivateProfileIntA(sectionName,"speedrunMode",0,configPath.c_str());
-
-    char buffer[32];
-    GetPrivateProfileStringA(sectionName, "displayMode", "borderless", buffer, sizeof(buffer), configPath.c_str());
-    for (size_t i = 0; i < sizeof(buffer) && buffer[i] != '\0'; i++) {
-        buffer[i] = std::tolower(buffer[i]);
-    }
-    displayMode = buffer;
-
-    if (displayMode != "windowed" && displayMode != "borderless" && displayMode != "fullscreen") {
-        displayMode = "borderless";
-    }
-    
-    if (fov < 1 || fov > 155) fov = 95;
-    climbFOV = (110.0f / 95.0f) * fov;
-    runSlideFOV = (110.0 / 95.0) * fov;
-    
-    noCDDirectorySize = rootDirectory.length() + 1;
-    noCDDirectory = new BYTE[noCDDirectorySize];
-    
-    for (size_t i = 0; i < rootDirectory.length(); ++i) {
-        noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
-    }
-    noCDDirectory[rootDirectory.length()] = '\0';
-
-    if (width == 0) {
-        width = GetSystemMetrics(SM_CXSCREEN);
-    }
-
-    if (height == 0) {
-        height = GetSystemMetrics(SM_CYSCREEN);
-    }
-
-    resW = reinterpret_cast<BYTE*>(&width);
-    resH = reinterpret_cast<BYTE*>(&height);
+    RatataRConfig config;
+    loadConfig(config, configPath);
 
     DWORD hookAddressCursor = 0x670991;
     DWORD hookAddressSetWindowPosPush = 0x67a9d0;
@@ -343,15 +427,17 @@ DWORD WINAPI MainThread(LPVOID param) {
     jmpBackAddressShowConsole = hookAddressShowConsole+hookLengthShowConsole;
     jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
     jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
-    applyPatches(param);
+
+    applyPatches(param, config);
+
     hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
-    if (displayMode == "borderless") {
+    if (config.displayMode == DisplayModes::Borderless) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
     }
-    else if (displayMode != "fullscreen") {
+    else if (config.displayMode != DisplayModes::Fullscreen) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
     }
-    if (console) {
+    if (config.console) {
         hook((void*)hookAddressConsoleEnable, hEnableConsole, hookLengthConsoleEnable);
         hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
     }
