@@ -54,8 +54,8 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
     const char* sectionName = "CONFIG";
 
     IntOption intOptions[] = {
-        {"width", &RatataRConfig::width, 0},
-        {"height", &RatataRConfig::height, 0},
+        {"width",                       &RatataRConfig::width,                              0},
+        {"height",                      &RatataRConfig::height,                             0},
     };
 
     BoolOption boolOptions[] = {
@@ -71,7 +71,7 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
     };
     
     FloatOption floatOptions[] = {
-        {"fov", &RatataRConfig::fov, 95},
+        {"fov",                         &RatataRConfig::fov,                                95},
     };
 
     // Get int options
@@ -272,7 +272,7 @@ void patch(BYTE* ptr, BYTE* buf, size_t len) {
     VirtualProtect(ptr, len, curProtection, &curProtection);
 }
 
-void applyPatches(LPVOID param, RatataRConfig& cfg) {
+void applyBasePatches(RatataRConfig& cfg) {
     BYTE zero[] = {0x00,0x00,0x00,0x00};
     BYTE jmp[] = {0xEB};
     BYTE nop[] = {0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90};
@@ -312,22 +312,24 @@ void applyPatches(LPVOID param, RatataRConfig& cfg) {
     patch((BYTE*)0x00654FD7, nop, 2);
     patch((BYTE*)0x00655015, jmp, 1);
 
-    //Music & video directory
-    size_t noCDDirectorySize = rootDirectory.length() + 1;
-    BYTE* noCDDirectory = new BYTE[noCDDirectorySize];
+    // Tell the game where the disc files can be found
+    const size_t len = rootDirectory.length();
+    BYTE* noCDDirectory = new BYTE[len + 1];
 
-    for (size_t i = 0; i < rootDirectory.length(); ++i) {
+    for (size_t i = 0; i < len; ++i) {
         noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
     }
-    noCDDirectory[rootDirectory.length()] = '\0';
-    patch((BYTE*)0x007DF135, noCDDirectory, noCDDirectorySize);
+    noCDDirectory[len] = '\0';
+    patch((BYTE*)0x007DF135, noCDDirectory, len);
 
     delete[] noCDDirectory;
 
-    //Stop directory from being overwritten
+    // Stop directory from being overwritten
+    // This one is scary because I don't exactly know what the purpose if this one is.
+    // Please check this when you have the time.
     patch((BYTE*)0x00654D8D, nop, 6);
 
-    //Allow invalid save names
+    //Allow banned save names
     patch((BYTE*)0x004E8F5A, jmp, 1);
 
     //Allow entering blank save name
@@ -344,58 +346,59 @@ void applyPatches(LPVOID param, RatataRConfig& cfg) {
     if (!cfg.autoSave) {
         patch((BYTE*)0x005599F8, nop, 13);
     }
+}
 
-    // Speedrun mode only patches
-    if (!cfg.speedrunMode) {
-        //Apply FOV
-        patch((BYTE*)0x00580C7C, jmp, 1); //BYPASS FOV OVERFLOW ERROR
-        patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&cfg.fov), sizeof(float));
-        patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&cfg.climbFOV), sizeof(float));
-        patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&cfg.runSlideFOV), sizeof(double));
+void applyNonSpeedrunPatches(RatataRConfig& cfg) {
+    // These patches will not get applied when speedrun mode is turned on!
 
-        if (cfg.improvedViewDistance) {
-            //Use default far value
-            patch((BYTE*)0x00402326, nop, 2);
-            patch((BYTE*)0x00402337, nop, 2);
-            //Set default far value to 500
-            patch((BYTE*)0x0070A5B0, (BYTE*)"\x00\x00\xFA\x43", 4);
+    //Apply FOV
+    patch((BYTE*)0x00580C7C, (BYTE*)"\xEB", 1); //BYPASS FOV OVERFLOW ERROR
+    patch((BYTE*)0x0070A7D8, reinterpret_cast<BYTE*>(&cfg.fov), sizeof(float));
+    patch((BYTE*)0x0070A7A4, reinterpret_cast<BYTE*>(&cfg.climbFOV), sizeof(float));
+    patch((BYTE*)0x0070A798, reinterpret_cast<BYTE*>(&cfg.runSlideFOV), sizeof(double));
 
-            //Remove culling
-            patch((BYTE*)0x00678FD3, jmp, 1);
-            patch((BYTE*)0x00678FB1, nop, 6);
-            patch((BYTE*)0x006175D2, nop, 2);
-            patch((BYTE*)0x006175DF, nop, 2);
-            patch((BYTE*)0x006EDB57, nop, 2);
-            patch((BYTE*)0x006EDB61, nop, 2);
+    if (cfg.improvedViewDistance) {
+        //Use default far value
+        patch((BYTE*)0x00402326, (BYTE*)"\x90\x90", 2);
+        patch((BYTE*)0x00402337, (BYTE*)"\x90\x90", 2);
+        //Set default far value to 500
+        patch((BYTE*)0x0070A5B0, (BYTE*)"\x00\x00\xFA\x43", 4);
 
-            //Force max Lod
-            patch((BYTE*)0x00617655, jmp, 1);
+        //Remove culling
+        patch((BYTE*)0x00678FD3, (BYTE*)"\xEB", 1);
+        patch((BYTE*)0x00678FB1, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
+        patch((BYTE*)0x006175D2, (BYTE*)"\x90\x90", 2);
+        patch((BYTE*)0x006175DF, (BYTE*)"\x90\x90", 2);
+        patch((BYTE*)0x006EDB57, (BYTE*)"\x90\x90", 2);
+        patch((BYTE*)0x006EDB61, (BYTE*)"\x90\x90", 2);
 
-            //Remove item freezing
-            patch((BYTE*)0x0049CA91, jmp, 1);
-        }
+        //Force max Lod
+        patch((BYTE*)0x00617655, (BYTE*)"\xEB", 1);
 
-        if (!cfg.fog) {
-            patch((BYTE*)0x00678593, (BYTE*)"\xE9\x8F\x00\x00\x00\x90", 6);
-        }
+        //Remove item freezing
+        patch((BYTE*)0x0049CA91, (BYTE*)"\xEB", 1);
+    }
 
-        if (cfg.noBonks) {
-            patch((BYTE*)0x0043dd76, (BYTE*)"\xE9\x16\x01\x00\x00\x90", 6);
-        }
+    if (!cfg.fog) {
+        patch((BYTE*)0x00678593, (BYTE*)"\xE9\x8F\x00\x00\x00\x90", 6);
+    }
 
-        //Enable console
-        if (cfg.console) {
-            patch((BYTE*)0x0066A2E4, nop, 3);
-        }
+    if (cfg.noBonks) {
+        patch((BYTE*)0x0043dd76, (BYTE*)"\xE9\x16\x01\x00\x00\x90", 6);
+    }
 
-        if (cfg.popupMenu) {
-            patch((BYTE*)0x00670983, nop, 2);
-            patch((BYTE*)0x00674738, nop, 6);
-        }
+    //Enable console
+    if (cfg.console) {
+        patch((BYTE*)0x0066A2E4, (BYTE*)"\x90\x90\x90", 3);
+    }
 
-        if (cfg.removeFpsCap) {
-            patch((BYTE*)0x006589D7, nop, 8);
-        }
+    if (cfg.popupMenu) {
+        patch((BYTE*)0x00670983, (BYTE*)"\x90\x90", 2);
+        patch((BYTE*)0x00674738, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
+    }
+
+    if (cfg.removeFpsCap) {
+        patch((BYTE*)0x006589D7, (BYTE*)"\x90\x90\x90\x90\x90\x90\x90\x90", 8);
     }
 }
 
@@ -405,9 +408,6 @@ DWORD WINAPI MainThread(LPVOID param) {
     std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
     rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
-
-    RatataRConfig config;
-    loadConfig(config, configPath);
 
     DWORD hookAddressCursor = 0x670991;
     DWORD hookAddressSetWindowPosPush = 0x67a9d0;
@@ -428,19 +428,28 @@ DWORD WINAPI MainThread(LPVOID param) {
     jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
     jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
 
-    applyPatches(param, config);
+    RatataRConfig config;
+    loadConfig(config, configPath);
+
+    applyBasePatches(config);
+    if (!config.speedrunMode) {
+        applyNonSpeedrunPatches(config);
+    }
 
     hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
     if (config.displayMode == DisplayModes::Borderless) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
     }
+
     else if (config.displayMode != DisplayModes::Fullscreen) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
     }
+
     if (config.console) {
         hook((void*)hookAddressConsoleEnable, hEnableConsole, hookLengthConsoleEnable);
         hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
     }
+
     hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
     hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
     return 0;
@@ -448,9 +457,9 @@ DWORD WINAPI MainThread(LPVOID param) {
 
 BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
-    case DLL_PROCESS_ATTACH:
-        CreateThread(0,0,MainThread,hModule,0,0);
-        break;
+        case DLL_PROCESS_ATTACH:
+            CreateThread(0,0,MainThread,hModule,0,0);
+            break;
     }
     return true;
 }
