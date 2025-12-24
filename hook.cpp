@@ -5,9 +5,6 @@
 #include <vector>
 #include <sstream>
 
-#include <cstdio>
-#include <cinttypes>
-
 struct PatchAddresses
 {
     uintptr_t hookAddressCursor;
@@ -90,7 +87,7 @@ struct PatchAddresses
 };
 
 std::string rootDirectory;
-PatchAddresses addresses;
+PatchAddresses addresses{};
 
 enum DisplayModes {
     Windowed,
@@ -137,7 +134,7 @@ struct BoolOption {
 struct FloatOption {
     const char* key;
     float RatataRConfig::* member;
-    int def;
+    int def; // Will be read as int from config
 };
 
 void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
@@ -250,8 +247,7 @@ std::vector<int> PatternToBytes(const std::string& pattern)
     std::istringstream stream(pattern);
     std::string byte;
 
-    while (stream >> byte)
-    {
+    while (stream >> byte) {
         if (byte == "??")
             bytes.push_back(-1);
         else
@@ -279,14 +275,11 @@ uintptr_t FindSignature(uintptr_t base, size_t size, const std::string& pattern)
     auto bytes = PatternToBytes(pattern);
     size_t patternSize = bytes.size();
 
-    for (size_t i = 0; i <= size - patternSize; i++)
-    {
+    for (size_t i = 0; i <= size - patternSize; i++) {
         bool found = true;
 
-        for (size_t j = 0; j < patternSize; j++)
-        {
-            if (bytes[j] != -1 && bytes[j] != *(uint8_t*)(base + i + j))
-            {
+        for (size_t j = 0; j < patternSize; j++) {
+            if (bytes[j] != -1 && bytes[j] != *(uint8_t*)(base + i + j)) {
                 found = false;
                 break;
             }
@@ -328,13 +321,11 @@ void getSignatures(PatchAddresses& address)
     address.hFpsFix2CleanUp = FindSignature(base, size, "53 56 57 E8 ?? ?? ?? ?? 8B 0D");
 
     ptr = FindSignature(base, size, "F6 05 ?? ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 6A"); // US
-    if (ptr)
-    {
+    if (ptr) {
         address.patchCursorHide = ptr;
         address.patchCursorHidePatch = { 0x66,0x81,0x7C,0x24,0x18,0x01,0x00,0x0F,0x85 };
     }
-    else
-    {
+    else {
         ptr = FindSignature(base, size, "F6 05 ?? ?? ?? ?? ?? 74 ?? 6A"); // Other versions
         address.patchCursorHide = ptr;
         address.patchCursorHidePatch = { 0x66,0x81,0x7C,0x24,0x18,0x01,0x00,0x75 };
@@ -445,13 +436,12 @@ bool hook(void *toHook, void *ourFunc, size_t len) {
     return true;
 }
 
-DWORD clipCursor1;
 DWORD jmpBackAddressCursor;
 void __declspec(naked) hClipCursor() {
     __asm {
         call GetClientRect
         lea ecx, [esp+0x1c]
-        mov edx, dword ptr ds:[clipCursor1]
+        mov edx, dword ptr ds:[0x007df95c]//addresses.hClipCursor
         push 0x2
         push ecx
         push 0x0
@@ -519,11 +509,11 @@ void __declspec(naked) hShowConsole() {
     }
 }
 
-DWORD FpsFix1;
+
 DWORD jmpBackAddressFpsFix1;
 void __declspec(naked) hFpsFix1() {
     __asm {
-        add dword ptr ds:[FpsFix1],0x1
+        add dword ptr ds:[0x007df954]/*addresses.hFpsFix1*/, 0x1
         push 0x1
         call timeBeginPeriod
         jmp [jmpBackAddressFpsFix1]
@@ -531,13 +521,13 @@ void __declspec(naked) hFpsFix1() {
 }
 
 DWORD jmpBackAddressFpsFix2;
-uint32_t FpsFix2cleanUp;
+uint32_t cleanUp = 0x005c5170; //addresses.hFpsFix2CleanUp
 void __declspec(naked) hFpsFix2() {
     __asm {
-        call FpsFix2cleanUp
+        call cleanUp
         push 0x1
         call timeEndPeriod
-        jmp [jmpBackAddressFpsFix2]
+        jmp[jmpBackAddressFpsFix2]
     }
 }
 
@@ -641,9 +631,11 @@ void applyNonSpeedrunPatches(RatataRConfig& cfg) {
         //Use default far value
         patch((BYTE*)addresses.patchDefaultFarValue1, (BYTE*)"\x90\x90", 2);
         patch((BYTE*)addresses.patchDefaultFarValue2, (BYTE*)"\x90\x90", 2);
-        //Set default far value to 500
-        patch((BYTE*)addresses.defaultFarValue, (BYTE*)"\x00\x00\xFA\x43", 4);
 
+        //Set default far value to 500
+        float defaultFar = 500;
+        patch((BYTE*)addresses.defaultFarValue, reinterpret_cast<BYTE*>(&defaultFar), sizeof(float));
+        
         //Remove culling
         patch((BYTE*)addresses.patchRemoveCulling1, (BYTE*)"\xEB", 1);
         patch((BYTE*)addresses.patchRemoveCulling2, (BYTE*)"\x90\x90\x90\x90\x90\x90", 6);
@@ -710,10 +702,6 @@ DWORD WINAPI MainThread(LPVOID param) {
     jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
     jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
 
-    FpsFix1 = addresses.hFpsFix1;
-    clipCursor1 = addresses.hClipCursor;
-    FpsFix2cleanUp = addresses.hFpsFix2CleanUp;
-
     RatataRConfig config;
     loadConfig(config, configPath);
 
@@ -722,7 +710,9 @@ DWORD WINAPI MainThread(LPVOID param) {
         applyNonSpeedrunPatches(config);
     }
 
-    hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
+    // The commented hooks have not been implemented yet.
+
+    //hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
     if (config.displayMode == DisplayModes::Borderless) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
     }
@@ -736,8 +726,8 @@ DWORD WINAPI MainThread(LPVOID param) {
         hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
     }
 
-    hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
-    hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
+    //hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
+    //hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
 
     return 0;
 }
