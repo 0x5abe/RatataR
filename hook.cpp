@@ -213,8 +213,10 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
     cfg.displayMode = parseDisplayMode(displayModeBuffer);
 
     // Clamp FOV between 1 and 155
-    if (cfg.fov < 1.0f) cfg.fov = 1.0f;
-    else if (cfg.fov > 155.0f) cfg.fov = 155.0f;
+    const float fovMin = 1.0f;
+    const float fovMax = 155.0f;
+    if (cfg.fov < fovMin) cfg.fov = fovMin;
+    else if (cfg.fov > fovMax) cfg.fov = fovMax;
     
     // Update dependent values
     cfg.climbFOV = (110.0f / 95.0f) * cfg.fov;
@@ -587,7 +589,7 @@ void applyBasePatches(RatataRConfig& cfg) {
     BYTE* noCDDirectory = new BYTE[len + 1];
 
     for (size_t i = 0; i < len; ++i) {
-        noCDDirectory[i] = static_cast <BYTE>(rootDirectory[i]);
+        noCDDirectory[i] = static_cast<BYTE>(rootDirectory[i]);
     }
     noCDDirectory[len] = '\0';
     patch((BYTE*)addresses.musicVideoDirectory, noCDDirectory, len);
@@ -633,7 +635,7 @@ void applyNonSpeedrunPatches(RatataRConfig& cfg) {
         patch((BYTE*)addresses.patchDefaultFarValue2, (BYTE*)"\x90\x90", 2);
 
         //Set default far value to 500
-        float defaultFar = 500;
+        float defaultFar = 500.0f;
         patch((BYTE*)addresses.defaultFarValue, reinterpret_cast<BYTE*>(&defaultFar), sizeof(float));
         
         //Remove culling
