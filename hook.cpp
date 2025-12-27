@@ -441,11 +441,16 @@ bool getSignatures(PatchAddresses& address)
     FIND_SIG_OR_FAIL(address.patchNoBonks,
         "0f 85 ?? ?? ?? ?? 8b 86 ?? ?? ?? ?? 25 ?? ?? ?? ?? 33 c9 3d ?? ?? ?? ?? 75 ?? 3b cb 74");
 
-    // TODO: Add sigscan for levelIdBaseAddr, playerObjectsAddr, getIDAddr
+    // TODO: Add sigscan for playerObjectsAddr
     // US only right now
-    address.levelIdBaseAddr = 0x007DE8A8;
+
+    FIND_SIG_OR_FAIL(ptr, "8B 0D ?? ?? ?? ?? 50 E8 ?? ?? ?? ?? 8B 48 ?? 89 4E");
+    address.levelIdBaseAddr = ReadPtr32(ptr + 0x2);
+
+    FIND_SIG_OR_FAIL(address.getIDAddr, "8b 54 24 ?? 8a 0a");
+
     address.playerObjectsAddr = 0x7C58FC;
-    address.getIDAddr = 0x58D670;
+
 
     return true;
 }
