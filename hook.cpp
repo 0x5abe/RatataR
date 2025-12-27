@@ -4,6 +4,7 @@
 #include <Psapi.h>
 #include <vector>
 #include <sstream>
+#include "rich-presence/rpc.h"
 
 HANDLE readyEvent = nullptr;
 
@@ -105,9 +106,16 @@ struct PatchAddresses
     uintptr_t patchDefaultFarValue2;
 
     uintptr_t defaultFarValue;
+
+    uintptr_t levelIdBaseAddr;
+    uintptr_t playerObjectsAddr;
+    uintptr_t getIDAddr;
 };
 
 std::string rootDirectory;
+DWORD levelIdBaseAddr;
+DWORD playerObjectsAddr;
+DWORD getIDAddr;
 PatchAddresses addresses{};
 
 enum DisplayModes {
@@ -131,6 +139,7 @@ struct RatataRConfig {
     bool fog;
     bool noBonks;
     bool speedrunMode;
+    bool discordRichPresence;
     DisplayModes displayMode;
 };
 
@@ -176,6 +185,7 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
         {"fog",                         &RatataRConfig::fog,                           true},
         {"noBonks",                     &RatataRConfig::noBonks,                       false},
         {"speedrunMode",                &RatataRConfig::speedrunMode,                  false},
+        {"discordRichPresence",         &RatataRConfig::discordRichPresence,           false},
     };
     
     FloatOption floatOptions[] = {
@@ -251,6 +261,11 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
     // Set to screen resolution if height is 0
     if (cfg.height == 0) {
         cfg.height = GetSystemMetrics(SM_CYSCREEN);
+    }
+
+    // Start rich presence thread
+    if (cfg.discordRichPresence) {
+        CreateThread(0, 0, InitRPC, 0, 0, 0);
     }
 }
 
@@ -426,9 +441,14 @@ bool getSignatures(PatchAddresses& address)
     FIND_SIG_OR_FAIL(address.patchNoBonks,
         "0f 85 ?? ?? ?? ?? 8b 86 ?? ?? ?? ?? 25 ?? ?? ?? ?? 33 c9 3d ?? ?? ?? ?? 75 ?? 3b cb 74");
 
+    // TODO: Add sigscan for levelIdBaseAddr, playerObjectsAddr, getIDAddr
+    // US only right now
+    address.levelIdBaseAddr = 0x007DE8A8;
+    address.playerObjectsAddr = 0x7C58FC;
+    address.getIDAddr = 0x58D670;
+
     return true;
 }
-
 
 bool hook(void *toHook, void *ourFunc, size_t len) {
     if (len < 5) {
@@ -718,7 +738,10 @@ DWORD WINAPI MainThread(LPVOID param) {
     hClipCursorAddress = addresses.hClipCursor;
     hFpsFix1Addr = addresses.hFpsFix1;
     cleanUp = addresses.hFpsFix2CleanUp;
-
+    levelIdBaseAddr = addresses.levelIdBaseAddr;
+    playerObjectsAddr = addresses.playerObjectsAddr;
+    getIDAddr = addresses.getIDAddr;
+    
     RatataRConfig config;
     loadConfig(config, configPath);
 
