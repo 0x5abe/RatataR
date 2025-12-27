@@ -40,7 +40,13 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
                 CloseHandle(hThread);   
             }
             VirtualFreeEx(pi.hProcess, loc, dllPath.length()+1, MEM_RELEASE);
-            
+
+            HANDLE evt = OpenEventA(SYNCHRONIZE, FALSE, "RatataR_Patched");
+            if (evt) {
+                WaitForSingleObject(evt, INFINITE);
+                CloseHandle(evt);
+            }
+
             ResumeThread(pi.hThread);
             
             HWND hWnd = FindWindowA(NULL,"Ratatouille");

@@ -5,6 +5,24 @@
 #include <vector>
 #include <sstream>
 
+HANDLE readyEvent = nullptr;
+
+bool SigFail(const char* name, const char* pattern) {
+    char buf[1024];
+    sprintf_s(
+        buf,
+        "Signature NOT FOUND:\n\n%s\n\nPattern:\n%s",
+        name,
+        pattern
+    );
+    MessageBoxA(nullptr, buf, "Signature error", MB_ICONERROR | MB_OK);
+    return false;
+}
+
+#define FIND_SIG_OR_FAIL(var, pattern)            \
+        var = FindSignature(base, size, pattern); \
+        if (!(var)) return SigFail(#var, pattern) \
+
 struct PatchAddresses
 {
     uintptr_t hookAddressCursor;
@@ -294,7 +312,7 @@ uintptr_t FindSignature(uintptr_t base, size_t size, const std::string& pattern)
     return 0;
 }
 
-void getSignatures(PatchAddresses& address)
+bool getSignatures(PatchAddresses& address)
 {
     auto mainMod = GetMainModule();
     const uintptr_t base = mainMod.base;
@@ -302,121 +320,111 @@ void getSignatures(PatchAddresses& address)
 
     uintptr_t ptr = 0;
 
-    ptr = FindSignature(base, size, "8B 15 ?? ?? ?? ?? 8D 4C 24");
+    FIND_SIG_OR_FAIL(ptr, "8B 15 ?? ?? ?? ?? 8D 4C 24");
     address.hookAddressCursor = ptr + 0x0C;
     address.hClipCursor = ReadPtr32(ptr + 0x2);
 
-    ptr = FindSignature(base, size, "6A ?? 03 C7 50 55");
-    address.hookAddressSetWindowPosPush = ptr;
+    FIND_SIG_OR_FAIL(address.hookAddressSetWindowPosPush, "6A ?? 03 C7 50 55");
+    FIND_SIG_OR_FAIL(address.hookAddressConsoleEnable,   "09 81 ?? ?? ?? ?? C2 ?? ?? 81 EC");
+    FIND_SIG_OR_FAIL(address.hookAddressShowConsole,     "21 9E ?? ?? ?? ?? 5E");
 
-    ptr = FindSignature(base, size, "09 81 ?? ?? ?? ?? C2 ?? ?? 81 EC");
-    address.hookAddressConsoleEnable = ptr;
-
-    ptr = FindSignature(base, size, "21 9E ?? ?? ?? ?? 5E");
-    address.hookAddressShowConsole = ptr;
-
-    ptr = FindSignature(base, size, "83 05 ?? ?? ?? ?? ?? 80 3D");
+    FIND_SIG_OR_FAIL(ptr, "83 05 ?? ?? ?? ?? ?? 80 3D");
     address.hookAddressFpsFix1 = ptr;
     address.hookAddressFpsFix2 = ptr + 0x1E;
     address.hFpsFix1 = ReadPtr32(ptr + 0x2);
-    
-    address.hFpsFix2CleanUp = FindSignature(base, size, "53 56 57 E8 ?? ?? ?? ?? 8B 0D");
 
-    ptr = FindSignature(base, size, "F6 05 ?? ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 6A"); // US
+    FIND_SIG_OR_FAIL(address.hFpsFix2CleanUp, "53 56 57 E8 ?? ?? ?? ?? 8B 0D");
+
+    ptr = FindSignature(base, size, "F6 05 ?? ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 6A");
     if (ptr) {
         address.patchCursorHide = ptr;
         address.patchCursorHidePatch = { 0x66,0x81,0x7C,0x24,0x18,0x01,0x00,0x0F,0x85 };
-    }
-    else {
-        ptr = FindSignature(base, size, "F6 05 ?? ?? ?? ?? ?? 74 ?? 6A"); // Other versions
+    } else {
+        FIND_SIG_OR_FAIL(ptr, "F6 05 ?? ?? ?? ?? ?? 74 ?? 6A");
         address.patchCursorHide = ptr;
         address.patchCursorHidePatch = { 0x66,0x81,0x7C,0x24,0x18,0x01,0x00,0x75 };
     }
 
-    ptr = FindSignature(base, size, "0E 66 C7 44 24");
+    FIND_SIG_OR_FAIL(ptr, "0E 66 C7 44 24");
     address.customResPatch1 = ptr;
     address.customResPatch2 = ptr + 0x6;
     address.customResPatch3 = ptr + 0x0D;
 
-    ptr = FindSignature(base, size, "80 68 ?? ?? C2");
-    address.initialWindowPositionPatch = ptr;
+    FIND_SIG_OR_FAIL(address.initialWindowPositionPatch, "80 68 ?? ?? C2");
 
-    ptr = FindSignature(base, size, "80 68 ?? ?? 00 80");
+    FIND_SIG_OR_FAIL(ptr, "80 68 ?? ?? 00 80");
     address.notShowingWindowBeforeD3d9DeviceCreatedPatch1 = ptr + 0xA;
     address.notShowingWindowBeforeD3d9DeviceCreatedPatch2 = ptr;
 
-    ptr = FindSignature(base, size, "89 8D ?? ?? ?? ?? 89 0E");
-    address.patchWindowed = ptr;
+    FIND_SIG_OR_FAIL(address.patchWindowed, "89 8D ?? ?? ?? ?? 89 0E");
+    FIND_SIG_OR_FAIL(address.patchWindowPosBorderlessOrBorder, "AE 01 00 00 6A");
+    FIND_SIG_OR_FAIL(address.patchBorderless, "CA ?? ?? F0 ?? FF 15");
+    FIND_SIG_OR_FAIL(address.patchWindowKey, "16 51 50");
 
-    ptr = FindSignature(base, size, "AE 01 00 00 6A");
-    address.patchWindowPosBorderlessOrBorder = ptr;
+    FIND_SIG_OR_FAIL(address.bypassDiscRequirementPatch1, "0F 85 ?? ?? ?? ?? 8D 84 24 ?? ?? ?? ?? 8B D6");
 
-    ptr = FindSignature(base, size, "CA ?? ?? F0 ?? FF 15");
-    address.patchBorderless = ptr;
-
-    ptr = FindSignature(base, size, "16 51 50");
-    address.patchWindowKey = ptr;
-
-    ptr = FindSignature(base, size, "0F 85 ?? ?? ?? ?? 8D 84 24 ?? ?? ?? ?? 8B D6");
-    address.bypassDiscRequirementPatch1 = ptr;
-
-    ptr = FindSignature(base, size, "74 ?? 53 53 8D 44 24");
+    FIND_SIG_OR_FAIL(ptr, "74 ?? 53 53 8D 44 24");
     address.bypassDiscRequirementPatch2 = ptr;
     address.bypassDiscRequirementPatch3 = ptr + 0x3E;
 
-    ptr = FindSignature(base, size, "B8 ?? ?? ?? ?? 8D 50 ?? 8B FF");
+    FIND_SIG_OR_FAIL(ptr, "B8 ?? ?? ?? ?? 8D 50 ?? 8B FF");
     address.musicVideoDirectory = ReadPtr32(ptr + 0x1);
 
-    ptr = FindSignature(base, size, "C7 06 ?? ?? ?? ?? 88 9E ?? ?? ?? ?? 88 9E");
+    FIND_SIG_OR_FAIL(ptr, "C7 06 ?? ?? ?? ?? 88 9E ?? ?? ?? ?? 88 9E");
     address.stopMusicVideoDirectoryOverwrite = ptr + 0x36;
 
-    ptr = FindSignature(base, size,
+    FIND_SIG_OR_FAIL(address.bypassFovOverflow,
         "74 ?? 6A ?? DD D8 6A ?? 6A ?? 6A ?? 6A ?? 6A ?? 68 ?? ?? ?? ?? "
         "6A ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? D9 44 24 ?? "
         "83 C4 ?? D9 9E ?? ?? ?? ?? 5E C2 ?? ?? CC CC CC CC CC CC CC CC");
-    address.bypassFovOverflow = ptr;
 
-    address.fov = FindSignature(base, size, "00 00 BE 42");
-    address.climbFov = FindSignature(base, size, "00 00 DC 42");
-    address.runSlideFov = FindSignature(base, size, "00 00 00 00 00 80 5B 40");
+    FIND_SIG_OR_FAIL(address.fov,        "00 00 BE 42");
+    FIND_SIG_OR_FAIL(address.climbFov,   "00 00 DC 42");
+    FIND_SIG_OR_FAIL(address.runSlideFov,"00 00 00 00 00 80 5B 40");
 
-    address.patchConsole = FindSignature(base, size, "83 E0 ?? 09 81");
-    address.patchPopupMenu0 = FindSignature(base, size, "74 ?? 8B 15 ?? ?? ?? ?? 8D 4C 24");
-    address.patchPopupMenu1 = FindSignature(base, size, "09 05 ?? ?? ?? ?? 8B 95");
-    address.patchRemoveFpsCap = FindSignature(base, size, "6A ?? FF 15 ?? ?? ?? ?? 8B 3D");
-    address.patchInvertVerticalLook = FindSignature(base, size, "00 D9 45 00 74 06");
+    FIND_SIG_OR_FAIL(address.patchConsole, "83 E0 ?? 09 81");
+    FIND_SIG_OR_FAIL(address.patchPopupMenu0, "74 ?? 8B 15 ?? ?? ?? ?? 8D 4C 24");
+    FIND_SIG_OR_FAIL(address.patchPopupMenu1, "09 05 ?? ?? ?? ?? 8B 95");
+    FIND_SIG_OR_FAIL(address.patchRemoveFpsCap, "6A ?? FF 15 ?? ?? ?? ?? 8B 3D");
+    FIND_SIG_OR_FAIL(address.patchInvertVerticalLook, "00 D9 45 00 74 06");
 
-    ptr = FindSignature(base, size, "C6 82 ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 F8");
+    FIND_SIG_OR_FAIL(ptr, "C6 82 ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 F8");
     address.patchAutoSave = ptr - 0x6;
 
-    address.patchAllowEmptySaveNames = FindSignature(base, size, "75 ?? 81 C6 ?? ?? ?? ?? 57");
+    FIND_SIG_OR_FAIL(address.patchAllowEmptySaveNames, "75 ?? 81 C6 ?? ?? ?? ?? 57");
+    FIND_SIG_OR_FAIL(address.patchAllowBannedSaveNames, "74 ?? 8B 5C 24 ?? BE");
 
-    address.patchAllowBannedSaveNames = FindSignature(base, size, "74 ?? 8B 5C 24 ?? BE");
+    FIND_SIG_OR_FAIL(address.patchAllowMultiInstances1,
+        "74 ?? 6a ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 6a");
+    FIND_SIG_OR_FAIL(address.PatchAllowMultiInstances2,
+        "75 ?? 8b 0d ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68");
 
-    address.patchAllowMultiInstances1 = FindSignature(base, size, "74 ?? 6a ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 6a");
-    address.PatchAllowMultiInstances2 = FindSignature(base, size, "75 ?? 8b 0d ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68");
+    FIND_SIG_OR_FAIL(address.patchFog, "0f 84 ?? ?? ?? ?? 80 78");
+    FIND_SIG_OR_FAIL(address.patchForceMaxLod, "7e ?? f7 43");
+    FIND_SIG_OR_FAIL(address.patchRemoveItemFreezing, "75 ?? d9 05 ?? ?? ?? ?? d8 9e");
 
-    address.patchFog = FindSignature(base, size, "0f 84 ?? ?? ?? ?? 80 78");
+    FIND_SIG_OR_FAIL(address.patchDefaultFarValue1,
+        "75 ?? d9 05 ?? ?? ?? ?? d9 5c 24 ?? 80 7c 24");
+    FIND_SIG_OR_FAIL(address.patchDefaultFarValue2,
+        "74 ?? d9 44 24 ?? d9 9e ?? ?? ?? ?? d9 86");
 
-    address.patchForceMaxLod = FindSignature(base, size, "7e ?? f7 43");
-
-    address.patchRemoveItemFreezing = FindSignature(base, size, "75 ?? d9 05 ?? ?? ?? ?? d8 9e");
-
-    address.patchDefaultFarValue1 = FindSignature(base, size, "75 ?? d9 05 ?? ?? ?? ?? d9 5c 24 ?? 80 7c 24");
-    address.patchDefaultFarValue2 = FindSignature(base, size, "74 ?? d9 44 24 ?? d9 9e ?? ?? ?? ?? d9 86");
-
-    ptr = FindSignature(base, size, "20 41 ?? 00 c8");
+    FIND_SIG_OR_FAIL(ptr, "20 41 ?? 00 c8");
     address.defaultFarValue = ptr + 0x2;
 
-    address.patchRemoveCulling1 = FindSignature(base, size, "75 ?? 57 55 8b cb");
-    address.patchRemoveCulling2 = FindSignature(base, size, "0f 84 ?? ?? ?? ?? 8b 85 ?? ?? ?? ?? 39 98");
-    address.patchRemoveCulling3 = FindSignature(base, size, "7a ?? d8 97 ?? ?? ?? ?? df e0 f6 c4 ?? 7a ?? d9 e8");
-    address.patchRemoveCulling4 = FindSignature(base, size, "7a ?? d9 e8 d8 5b ?? df e0 f6 c4 ?? 74");
-    address.patchRemoveCulling5 = FindSignature(base, size, "7a ?? d8 5f");
-    address.patchRemoveCulling6 = FindSignature(base, size, "7a ?? d9 e8 d8 59 ?? df e0 f6 c4 ?? 0f 85 ?? ?? ?? ?? eb ?? dd d8 53 56 8b 74 24 ?? 8b 9e ?? ?? ?? ?? 8b 43 ?? d9 40 ?? 83 c0 ?? d8 a6 ?? ?? ?? ?? 51 d9 5c 24 ?? d9 40 ?? d8 a6 ?? ?? ?? ?? d9 5c 24 ?? d9 40 ?? d8 a6 ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? d9 44 24 ?? d9 44 24 ?? d9 41 ?? d9 1c ?? d9 c1 de ca d9 c2 de cb d9 c9 de c2 dc c8 de c1 d9 5c 24 ?? d9 44 24 ?? e8 ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? 83 ec ?? d9 5c 24 ?? 8b cf d9 83 ?? ?? ?? ?? d8 8e ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? d9 5c 24 ?? d9 86 ?? ?? ?? ?? d9 5c 24 ?? d9 ee");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling1, "75 ?? 57 55 8b cb");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling2, "0f 84 ?? ?? ?? ?? 8b 85 ?? ?? ?? ?? 39 98");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling3, "7a ?? d8 97 ?? ?? ?? ?? df e0 f6 c4 ?? 7a ?? d9 e8");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling4, "7a ?? d9 e8 d8 5b ?? df e0 f6 c4 ?? 74");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling5, "7a ?? d8 5f");
+    FIND_SIG_OR_FAIL(address.patchRemoveCulling6,
+        "7a ?? d9 e8 d8 59 ?? df e0 f6 c4 ?? 0f 85 ?? ?? ?? ?? eb ?? dd d8 53 56 8b 74 24 ?? 8b 9e ?? ?? ?? ?? 8b 43 ?? d9 40 ?? 83 c0 ?? d8 a6 ?? ?? ?? ?? 51 d9 5c 24 ?? d9 40 ?? d8 a6 ?? ?? ?? ?? d9 5c 24 ?? d9 40 ?? d8 a6 ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? d9 44 24 ?? d9 44 24 ?? d9 41 ?? d9 1c ?? d9 c1 de ca d9 c2 de cb d9 c9 de c2 dc c8 de c1 d9 5c 24 ?? d9 44 24 ?? e8 ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? 83 ec ?? d9 5c 24 ?? 8b cf d9 83 ?? ?? ?? ?? d8 8e ?? ?? ?? ?? d9 5c 24 ?? d9 44 24 ?? d9 5c 24 ?? d9 86 ?? ?? ?? ?? d9 5c 24 ?? d9 ee");
 
-    address.patchNoBonks = FindSignature(base, size, "0f 85 ?? ?? ?? ?? 8b 86 ?? ?? ?? ?? 25 ?? ?? ?? ?? 33 c9 3d ?? ?? ?? ?? 75 ?? 3b cb 74");
+    FIND_SIG_OR_FAIL(address.patchNoBonks,
+        "0f 85 ?? ?? ?? ?? 8b 86 ?? ?? ?? ?? 25 ?? ?? ?? ?? 33 c9 3d ?? ?? ?? ?? 75 ?? 3b cb 74");
+
+    return true;
 }
+
 
 bool hook(void *toHook, void *ourFunc, size_t len) {
     if (len < 5) {
@@ -438,12 +446,13 @@ bool hook(void *toHook, void *ourFunc, size_t len) {
     return true;
 }
 
+DWORD hClipCursorAddress;
 DWORD jmpBackAddressCursor;
 void __declspec(naked) hClipCursor() {
     __asm {
         call GetClientRect
         lea ecx, [esp+0x1c]
-        mov edx, dword ptr ds:[0x007df95c]//addresses.hClipCursor
+        mov edx, dword ptr [hClipCursorAddress]
         push 0x2
         push ecx
         push 0x0
@@ -493,7 +502,6 @@ void __declspec(naked) hEnableConsole() {
     }
 }
 
-
 DWORD jmpBackAddressShowConsole;
 void __declspec(naked) hShowConsole() {
     __asm {
@@ -511,11 +519,11 @@ void __declspec(naked) hShowConsole() {
     }
 }
 
-
+DWORD hFpsFix1Addr;
 DWORD jmpBackAddressFpsFix1;
 void __declspec(naked) hFpsFix1() {
     __asm {
-        add dword ptr ds:[0x007df954]/*addresses.hFpsFix1*/, 0x1
+        add dword ptr [hFpsFix1Addr], 0x1
         push 0x1
         call timeBeginPeriod
         jmp [jmpBackAddressFpsFix1]
@@ -523,25 +531,20 @@ void __declspec(naked) hFpsFix1() {
 }
 
 DWORD jmpBackAddressFpsFix2;
-uint32_t cleanUp = 0x005c5170; //addresses.hFpsFix2CleanUp
+DWORD cleanUp;
 void __declspec(naked) hFpsFix2() {
     __asm {
         call cleanUp
         push 0x1
         call timeEndPeriod
-        jmp[jmpBackAddressFpsFix2]
+        jmp [jmpBackAddressFpsFix2]
     }
 }
 
 void patch(BYTE* ptr, BYTE* buf, size_t len) {
     DWORD curProtection;
     VirtualProtect(ptr, len, PAGE_EXECUTE_READWRITE, &curProtection);
-    while (len > 0) {
-        *(BYTE*)ptr = *buf;
-        ptr++;
-        buf++;
-        len--;
-    }
+    memcpy(ptr, buf, len);
     VirtualProtect(ptr, len, curProtection, &curProtection);
 }
 
@@ -683,7 +686,10 @@ DWORD WINAPI MainThread(LPVOID param) {
     std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
     rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
 
-    getSignatures(addresses);
+    if (!getSignatures(addresses)) {
+        SetEvent(readyEvent);
+        return 0;
+    }
 
     DWORD hookAddressCursor = addresses.hookAddressCursor;
     DWORD hookAddressSetWindowPosPush = addresses.hookAddressSetWindowPosPush;
@@ -703,6 +709,9 @@ DWORD WINAPI MainThread(LPVOID param) {
     jmpBackAddressShowConsole = hookAddressShowConsole+hookLengthShowConsole;
     jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
     jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
+    hClipCursorAddress = addresses.hClipCursor;
+    hFpsFix1Addr = addresses.hFpsFix1;
+    cleanUp = addresses.hFpsFix2CleanUp;
 
     RatataRConfig config;
     loadConfig(config, configPath);
@@ -712,9 +721,7 @@ DWORD WINAPI MainThread(LPVOID param) {
         applyNonSpeedrunPatches(config);
     }
 
-    // The commented hooks have not been implemented yet.
-
-    //hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
+    hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
     if (config.displayMode == DisplayModes::Borderless) {
         hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
     }
@@ -728,8 +735,10 @@ DWORD WINAPI MainThread(LPVOID param) {
         hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
     }
 
-    //hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
-    //hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
+    hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
+    hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
+
+    SetEvent(readyEvent);
 
     return 0;
 }
@@ -737,6 +746,7 @@ DWORD WINAPI MainThread(LPVOID param) {
 BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
         case DLL_PROCESS_ATTACH:
+            readyEvent = CreateEventA(nullptr, TRUE, FALSE, "RatataR_Patched");
             CreateThread(0,0,MainThread,hModule,0,0);
             break;
     }
