@@ -23,6 +23,9 @@ bool SigFail(const char* name, const char* pattern) {
         var = FindSignature(base, size, pattern); \
         if (!(var)) return SigFail(#var, pattern) \
 
+#define FIND_SIG(var, pattern)                   \
+        var = FindSignature(base, size, pattern) \
+
 struct PatchAddresses
 {
     uintptr_t hookAddressCursor;
@@ -394,9 +397,10 @@ bool getSignatures(PatchAddresses& address)
     FIND_SIG_OR_FAIL(address.patchAllowEmptySaveNames, "75 ?? 81 C6 ?? ?? ?? ?? 57");
     FIND_SIG_OR_FAIL(address.patchAllowBannedSaveNames, "74 ?? 8B 5C 24 ?? BE");
 
-    FIND_SIG_OR_FAIL(address.patchAllowMultiInstances1,
+    // Currently optional
+    FIND_SIG(address.patchAllowMultiInstances1,
         "74 ?? 6a ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 6a");
-    FIND_SIG_OR_FAIL(address.PatchAllowMultiInstances2,
+    FIND_SIG(address.PatchAllowMultiInstances2,
         "75 ?? 8b 0d ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68");
 
     FIND_SIG_OR_FAIL(address.patchFog, "0f 84 ?? ?? ?? ?? 80 78");
@@ -611,8 +615,10 @@ void applyBasePatches(RatataRConfig& cfg) {
     patch((BYTE*)addresses.patchAllowEmptySaveNames, jmp, 1);
     
     //Allow multiple game instances
-    patch((BYTE*)addresses.patchAllowMultiInstances1, jmp, 1);
-    patch((BYTE*)addresses.PatchAllowMultiInstances2, nop, 2);
+    if (addresses.patchAllowMultiInstances1 && addresses.PatchAllowMultiInstances2) {
+        patch((BYTE*)addresses.patchAllowMultiInstances1, jmp, 1);
+        patch((BYTE*)addresses.PatchAllowMultiInstances2, nop, 2);
+    }
 
     if (cfg.invertVerticalLook) {
         patch((BYTE*)addresses.patchInvertVerticalLook, (BYTE*)"\x75", 1);
