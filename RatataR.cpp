@@ -18,16 +18,17 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     std::string overlayPath = std::string(moduleFileName).substr(0, pos).append("\\").append(processName);
     std::string dllPath = std::string(moduleFileName).substr(0, pos).append("\\").append(dllName);
 
+    // CreateProcess parameters
     LPCSTR applicationName = overlayPath.c_str();
     LPSTR commandLine = nullptr;
-    LPSECURITY_ATTRIBUTES processAttributes = nullptr;
-    LPSECURITY_ATTRIBUTES threadAttributes = nullptr;
+    LPSECURITY_ATTRIBUTES procAttr = nullptr;
+    LPSECURITY_ATTRIBUTES threadAttr = nullptr;
     BOOL inheritHandles = FALSE;
     DWORD creationFlags = CREATE_SUSPENDED;
     LPVOID environment = nullptr;
     LPCSTR currentDirectory = nullptr;
 
-    if (CreateProcessA(applicationName, commandLine, processAttributes, threadAttributes, inheritHandles, creationFlags, environment, currentDirectory, &si, &pi)) {
+    if (CreateProcessA(applicationName, commandLine, procAttr, threadAttr, inheritHandles, creationFlags, environment, currentDirectory, &si, &pi)) {
         if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) { 
             void *loc = VirtualAllocEx(pi.hProcess, 0, MAX_PATH, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
             if (loc) {
@@ -39,7 +40,13 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
                 CloseHandle(hThread);   
             }
             VirtualFreeEx(pi.hProcess, loc, dllPath.length()+1, MEM_RELEASE);
-            
+
+            HANDLE evt = OpenEventA(SYNCHRONIZE, FALSE, "RatataR_Patched");
+            if (evt) {
+                WaitForSingleObject(evt, INFINITE);
+                CloseHandle(evt);
+            }
+
             ResumeThread(pi.hThread);
             
             HWND hWnd = FindWindowA(NULL,"Ratatouille");
