@@ -481,7 +481,8 @@ void __declspec(naked) hClipCursor() {
     __asm {
         call GetClientRect
         lea ecx, [esp+0x1c]
-        mov edx, dword ptr [hClipCursorAddress]
+        mov eax, dword ptr[hClipCursorAddress]
+        mov edx, dword ptr[eax]
         push 0x2
         push ecx
         push 0x0
