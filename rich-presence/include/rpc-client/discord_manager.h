@@ -3,11 +3,11 @@
 // 
 // Jay - 2022
 // ================================================== \\
-#include "discord_manager.h"
+//include "discord_manager.h"
 #include <string.h>
 #include <iostream>
-#include "include/discord-rpc/include/discord_rpc.h"
 #include <time.h>
+#include "include/discord-rpc/include/discord_rpc.h"
 #include "levels.h"
 static DiscordRichPresence discordPresence;
 

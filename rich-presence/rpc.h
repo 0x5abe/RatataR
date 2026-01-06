@@ -2,12 +2,15 @@
 #include <Windows.h>
 #include "include/rpc-client/discord_manager.h"
 
+constexpr DWORD UpdateFreq = 1000;
+
 DWORD WINAPI InitRPC(LPVOID lpParameter) {
     DiscordMan_Startup();
-    Sleep(10000);
+
     while (true) {
 		DiscordMan_Update();
-		Sleep(10);
+		Sleep(UpdateFreq);
 	}
+
     return TRUE;
 }

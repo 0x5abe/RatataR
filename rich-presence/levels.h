@@ -1,12 +1,32 @@
 #pragma once
 #include <Windows.h>
 
+template<typename T, typename Ptr>
+T* safe_deref_chain(Ptr base, std::initializer_list<uintptr_t> offsets, bool applyOffsetAfterLastDeref = true) {
+    if (!base) return nullptr;
+    char* addr = reinterpret_cast<char*>(base);
+
+    size_t i = 0;
+    for (auto offset : offsets) {
+        if (!addr) return nullptr;
+
+        addr = *reinterpret_cast<char**>(addr);
+        if (!addr) return nullptr;
+
+        if (i < offsets.size() - 1 || applyOffsetAfterLastDeref) {
+            addr += offset;
+        }
+        i++;
+    }
+    return reinterpret_cast<T*>(addr);
+}
+
 extern DWORD levelIdBaseAddr;
 extern DWORD playerObjectsAddr;
 extern DWORD getIDAddr;
 
 int*** playerObjects;
-int(__cdecl* getID)(const char* name, int startingIndx);
+int(__cdecl* getIDFn)(const char* name, int startingIndx);
 
 struct Level {
     char key;
@@ -14,7 +34,7 @@ struct Level {
     const char* imageName;
 };
 
-Level levelList[] = {
+Level constexpr levelList[] = {
     { 0, "In Menu", "bootingup" },
     { 1, "Somewhere in France", "somewhere_in_france" },
     { 2, "Destiny River", "destiny_river" },
@@ -69,97 +89,57 @@ Level levelList[] = {
     { 51, "Test_Nico", "bootingup" },
     { 52, "Test_Julien", "bootingup" }
 };
+constexpr int levelCount = sizeof(levelList) / sizeof(Level) - 1;
 
 void initRat()
 {
     playerObjects = (int***)playerObjectsAddr;
-    getID = (int(__cdecl*)(const char*, int))getIDAddr;
+    getIDFn = (int(__cdecl*)(const char*, int))getIDAddr;
 }
 
 Level getLevel()
 {
-    while (*((int*)levelIdBaseAddr) == 0) {
-        Sleep(1000);
-    }
-    int levelID = *(int*)(*(int*)(*(int*)(*(int*)(levelIdBaseAddr) + 8) + 0x9C4) + 0x7C);
-    if (levelID > 52 || levelID < 0)
+    int* levelPtr = safe_deref_chain<int>(levelIdBaseAddr, { 0x8, 0x9C4, 0x7C });
+    int levelID = levelPtr ? *levelPtr : 0;
+
+    if (levelID < 0 || levelID > levelCount)
     {
         return levelList[0];
     }
+
     return levelList[levelID];
 }
 
 const char* getCharName()
 {
-    while (*((int*)playerObjectsAddr) == 0) {
-        Sleep(1000);
+    int* charPtr = safe_deref_chain<int>(playerObjectsAddr, { 0x0, 0x4 });
+    int charID = charPtr ? *charPtr : -1;
+
+    if (getIDFn) {
+        if (charID == getIDFn("P_REMY", 0)) return "Playing as Remy";
+        if (charID == getIDFn("P_L_REMY", 0)) return "Playing as Linguini";
+        if (charID == getIDFn("P_EMILE", 0)) return "Playing as Emile";
+        if (charID == getIDFn("P_REMY_C", 0)) return "Playing as Remy (Chase)";
+        if (charID == getIDFn("P_REMY_R", 0)) return "Playing as Remy (Raft)";
+        if (charID == getIDFn("P_LINGUI", 0)) return "Playing as Linguini (Beta)";
+        if (charID == getIDFn("P_L_CAKE", 0)) return "Playing as Linguini (Cake Minigame)";
+        if (charID == getIDFn("P_R_BKD", 0)) return "Playing as Git (Rope Minigame)";
+        if (charID == getIDFn("P_REMY_S", 0)) return "Playing as Remy (Sephamore)";
+        if (charID == getIDFn("P_REMY_T", 0)) return "Playing as Serge (Heist Minigame)";
+        if (charID == getIDFn("P_R_SWMK", 0)) return "Playing as Celine (Conveyor Minigame)";
+        if (charID == getIDFn("P_FISH", 0)) return "Playing as Fishing Hook (Fishing Minigame)";
+        if (charID == getIDFn("P_R_WCCT", 0)) return "Playing as Twitch (Wire Connecting Minigame)";
+        if (charID == getIDFn("P_R_SWKN", 0)) return "Playing as Remy (Blender Minigame)";
+        if (charID == getIDFn("P_L_POTA", 0)) return "Playing as Linguini (Potato Minigame)";
+        if (charID == getIDFn("P_L_WASH", 0)) return "Playing as Linguini (Hose Minigame)";
+        if (charID == getIDFn("P_L_WASH2", 0)) return "Playing as Linguini (Hose Minigame)";
+        if (charID == getIDFn("P_PLAT01", 0)) return "Playing as Linguini (Salad Minigame)";
+        if (charID == getIDFn("P_SOUP01", 0)) return "Playing as Linguini (Soup Minigame)";
+        if (charID == getIDFn("P_L_CREP", 0)) return "Playing as Linguini (Crepe Minigame)";
+        if (charID == getIDFn("P_R_SOUP", 0)) return "Playing as Remy (Soup Minigame)";
+        if (charID == getIDFn("P_R_COL", 0)) return "Playing as Colette (Dinner Rush)";
     }
-    int charID = (*(int*)(*(int*)(*(int*)playerObjectsAddr) + 4));
-    if (charID == getID("P_REMY", 0)) {
-        return "Playing as Remy";
-    }
-    else if (charID == getID("P_L_REMY", 0)) {
-        return "Playing as Linguini";
-    }
-    else if (charID == getID("P_EMILE", 0)) {
-        return "Playing as Emile";
-    }
-    else if (charID == getID("P_REMY_C", 0)) {
-        return "Playing as Remy (Chase)";
-    }
-    else if (charID == getID("P_REMY_R", 0)) {
-        return "Playing as Remy (Raft)";
-    }
-    else if (charID == getID("P_LINGUI", 0)) {
-        return "Playing as Linguini (Beta)";
-    }
-    else if (charID == getID("P_L_CAKE", 0)) {
-        return "Playing as Linguini (Cake Minigame)";
-    }
-    else if (charID == getID("P_R_BKD", 0)) {
-        return "Playing as Git (Rope Minigame)";
-    }
-    else if (charID == getID("P_REMY_S", 0)) {
-        return "Playing as Remy (Sephamore)";
-    }
-    else if (charID == getID("P_REMY_T", 0)) {
-        return "Playing as Serge (Heist Minigame)";
-    }
-    else if (charID == getID("P_R_SWMK", 0)){
-        return "Playing as Celine (Conveyor Minigame)";
-    }
-    else if (charID == getID("P_FISH",0)) {
-        return "Playing as Fishing Hook (Fishing Minigame) (How???)";
-    }
-    else if (charID == getID("P_R_WCCT", 0)) {
-        return "Playing as Twitch (Wire Connecting Minigame)";
-    }
-    else if (charID == getID("P_R_SWKN", 0)) {
-        return "Playing as Remy (Blender Minigame)";
-    }
-    else if (charID == getID("P_L_POTA", 0)) {
-        return "Playing as Linguini (Potato Minigame)";
-    }
-    else if (charID == getID("P_L_WASH", 0)) {
-        return "Playing as Linguini (Hose Minigame) (Also how???)";
-    }
-    else if (charID == getID("P_L_WASH2", 0)) {
-        return "Playing as Linguini (Hose Minigame) (Also how???)";
-    }
-    else if (charID == getID("P_PLAT01", 0)) {
-        return "Playing as Linguini (Salad Minigame)";
-    }
-    else if (charID == getID("P_SOUP01", 0)) {
-        return "Playing as Linguini (Soup Minigame)";
-    }
-    else if (charID == getID("P_L_CREP", 0)) {
-        return "Playing as Linguini (Crepe Minigame) (How???)";
-    }
-    else if (charID == getID("P_R_SOUP", 0)) {
-        return "Playing as Remy (Soup Minigame)";
-    }
-    else if (charID == getID("P_R_COL", 0)) {
-        return "Playing as Colette (Dinner Rush)";
-    }
+
+    // Fallback
     return "Playing as Remy";
 }

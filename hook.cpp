@@ -4,9 +4,22 @@
 #include <Psapi.h>
 #include <vector>
 #include <sstream>
+#include <d3d9.h>
 #include "rich-presence/rpc.h"
+#include "DynArray_Z.h"
+#include "MinHook.h"
 
 HANDLE readyEvent = nullptr;
+
+using EndScene_t = HRESULT(__stdcall*)(IDirect3DDevice9*);
+EndScene_t oEndScene = nullptr;
+
+// Frame limiter
+static LARGE_INTEGER g_QPCFreq;
+static LARGE_INTEGER g_LastLimitTime;
+static bool g_TimerInitialized = false;
+static bool g_EnableFrameLimit = false;
+static double g_TargetFPS = 60.0;
 
 bool SigFail(const char* name, const char* pattern) {
     char buf[1024];
@@ -110,6 +123,14 @@ struct PatchAddresses
     uintptr_t levelIdBaseAddr;
     uintptr_t playerObjectsAddr;
     uintptr_t getIDAddr;
+
+    uintptr_t systemDatasPtrAddr;
+    uintptr_t rdrPtrAddr;
+    uintptr_t classMgrPtrAddr;
+    uintptr_t getPtrAddr;
+    uintptr_t drawStringAddr;
+
+    uintptr_t patchDrawFpsAddr;
 };
 
 std::string rootDirectory;
@@ -124,12 +145,18 @@ enum DisplayModes {
     Fullscreen
 };
 
+struct RemyFOV {
+    float normal;
+    float climbing;
+    double runningSliding;
+};
+RemyFOV g_Fov = { 95.0f, 110.0f, 110.0};
+
 struct RatataRConfig {
     unsigned int width;
     unsigned int height;
-    float fov;
-    float climbFOV;
-    double runSlideFOV;
+    unsigned int maxFps;
+    unsigned int fov;
     bool console;
     bool popupMenu;
     bool invertVerticalLook;
@@ -140,6 +167,7 @@ struct RatataRConfig {
     bool noBonks;
     bool speedrunMode;
     bool discordRichPresence;
+    bool displayFrameCounter;
     DisplayModes displayMode;
 };
 
@@ -161,18 +189,14 @@ struct BoolOption {
     bool def;
 };
 
-struct FloatOption {
-    const char* key;
-    float RatataRConfig::* member;
-    int def; // Will be read as int from config
-};
-
 void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
     const char* sectionName = "CONFIG";
 
     IntOption intOptions[] = {
         {"width",                       &RatataRConfig::width,                            0},
         {"height",                      &RatataRConfig::height,                           0},
+        {"maxFps",                      &RatataRConfig::maxFps,                           0},
+        {"fov",                         &RatataRConfig::fov,                              95},
     };
 
     BoolOption boolOptions[] = {
@@ -186,10 +210,7 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
         {"noBonks",                     &RatataRConfig::noBonks,                       false},
         {"speedrunMode",                &RatataRConfig::speedrunMode,                  false},
         {"discordRichPresence",         &RatataRConfig::discordRichPresence,           false},
-    };
-    
-    FloatOption floatOptions[] = {
-        {"fov",                         &RatataRConfig::fov,                              95},
+        {"displayFrameCounter",         &RatataRConfig::displayFrameCounter,           false},
     };
 
     // Get int options
@@ -212,18 +233,6 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
         ) != 0;
     }
 
-    // Get float options
-    for (const auto& opt : floatOptions) {
-        cfg.*(opt.member) = static_cast<float>(
-            GetPrivateProfileIntA(
-                sectionName,
-                opt.key,
-                opt.def,
-                configPath.c_str()
-            )
-        );
-    }
-
     // Get display mode
     char displayModeBuffer[32];
     GetPrivateProfileStringA(
@@ -243,15 +252,20 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
 
     cfg.displayMode = parseDisplayMode(displayModeBuffer);
 
-    // Clamp FOV between 1 and 155
-    const float fovMin = 1.0f;
-    const float fovMax = 155.0f;
-    if (cfg.fov < fovMin) cfg.fov = fovMin;
-    else if (cfg.fov > fovMax) cfg.fov = fovMax;
-    
-    // Update dependent values
-    cfg.climbFOV = (110.0f / 95.0f) * cfg.fov;
-    cfg.runSlideFOV = (110.0 / 95.0) * cfg.fov;
+    // Field Of View
+    constexpr float fovMin = 1.0f;
+    constexpr float fovMax = 155.0f;
+    constexpr float CLIMBING_RATIO = 110.0f / 95.0f;
+    constexpr double RUNNING_SLIDING_RATIO = 110.0 / 95.0;
+    float userFOV = static_cast<float>(cfg.fov);
+
+    // Clamp
+    if (userFOV < fovMin) userFOV = fovMin;
+    else if (userFOV > fovMax) userFOV = fovMax;
+
+    g_Fov.normal = userFOV;
+    g_Fov.climbing = CLIMBING_RATIO * userFOV;
+    g_Fov.runningSliding = RUNNING_SLIDING_RATIO * userFOV;
 
     // Set to screen resolution if width is 0
     if (cfg.width == 0) {
@@ -263,10 +277,9 @@ void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
         cfg.height = GetSystemMetrics(SM_CYSCREEN);
     }
 
-    // Start rich presence thread
-    if (cfg.discordRichPresence) {
-        CreateThread(0, 0, InitRPC, 0, 0, 0);
-    }
+    // Frame Limit
+    g_EnableFrameLimit = cfg.maxFps > 0.0;
+    g_TargetFPS = static_cast<double>(cfg.maxFps);
 }
 
 struct ModuleInfo {
@@ -449,6 +462,14 @@ bool getSignatures(PatchAddresses& address)
     FIND_SIG_OR_FAIL(ptr, "8b 15 ?? ?? ?? ?? 8b 1c 82");
     address.playerObjectsAddr = ReadPtr32(ptr + 0x2);
 
+    FIND_SIG_OR_FAIL(address.systemDatasPtrAddr, "8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? 8b 11 8b 42 ?? ff d0 8b 0d");
+    FIND_SIG_OR_FAIL(address.rdrPtrAddr, "a1 ?? ?? ?? ?? 8b 90 ?? ?? ?? ?? 8b 80 ?? ?? ?? ?? 89 54 24");
+    FIND_SIG_OR_FAIL(address.classMgrPtrAddr, "8b 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? c2 ?? ?? cc cc cc cc cc cc 8b 44 24");
+    FIND_SIG_OR_FAIL(address.getPtrAddr, "83 05 ?? ?? ?? ?? ?? 8b 54 24");
+    FIND_SIG_OR_FAIL(address.drawStringAddr, "55 8b ec 83 e4 ?? 81 ec ?? ?? ?? ?? 53 56 8b 75 ?? 80 7e ?? ?? d9 46");
+
+    FIND_SIG_OR_FAIL(address.patchDrawFpsAddr, "e8 ?? ?? ?? ?? 8b e5 5d c2 ?? ?? cc cc cc 83 ec");
+
     return true;
 }
 
@@ -550,10 +571,11 @@ DWORD hFpsFix1Addr;
 DWORD jmpBackAddressFpsFix1;
 void __declspec(naked) hFpsFix1() {
     __asm {
-        add dword ptr [hFpsFix1Addr], 0x1
+        mov eax, [hFpsFix1Addr]
+        add dword ptr[eax], 0x1
         push 0x1
         call timeBeginPeriod
-        jmp [jmpBackAddressFpsFix1]
+        jmp[jmpBackAddressFpsFix1]
     }
 }
 
@@ -561,11 +583,114 @@ DWORD jmpBackAddressFpsFix2;
 DWORD cleanUp;
 void __declspec(naked) hFpsFix2() {
     __asm {
-        call cleanUp
+        mov eax, [cleanUp]
+        call eax
         push 0x1
         call timeEndPeriod
-        jmp [jmpBackAddressFpsFix2]
+        jmp[jmpBackAddressFpsFix2]
     }
+}
+
+void InitTimers() {
+    QueryPerformanceFrequency(&g_QPCFreq);
+    QueryPerformanceCounter(&g_LastLimitTime);
+    g_TimerInitialized = true;
+}
+
+void ApplyFrameLimit() {
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+
+    double elapsed = double(now.QuadPart - g_LastLimitTime.QuadPart) /
+        double(g_QPCFreq.QuadPart);
+
+    double targetFrameTime = 1.0 / g_TargetFPS;
+
+    if (elapsed < targetFrameTime)
+    {
+        double remaining = targetFrameTime - elapsed;
+
+        if (remaining > 0.001)
+            Sleep(DWORD((remaining - 0.001) * 1000.0));
+
+        do {
+            QueryPerformanceCounter(&now);
+            elapsed =
+                double(now.QuadPart - g_LastLimitTime.QuadPart) /
+                double(g_QPCFreq.QuadPart);
+        } while (elapsed < targetFrameTime);
+    }
+
+    g_LastLimitTime = now;
+}
+
+HRESULT __stdcall hkEndScene(IDirect3DDevice9* pDevice) {
+    if (!g_TimerInitialized)
+        InitTimers();
+
+    if (g_EnableFrameLimit)
+        ApplyFrameLimit();
+
+    return oEndScene(pDevice);
+}
+
+bool HookD3D9EndScene() {
+    IDirect3D9* pD3D = Direct3DCreate9(D3D_SDK_VERSION);
+    if (!pD3D) return false;
+
+    WNDCLASSEXA wc = {
+        sizeof(WNDCLASSEXA),
+        CS_CLASSDC,
+        DefWindowProcA,
+        0L, 0L,
+        GetModuleHandle(nullptr),
+        nullptr, nullptr, nullptr, nullptr,
+        "DummyWindow",
+        nullptr
+    };
+    RegisterClassExA(&wc);
+
+    HWND hWnd = CreateWindowA(
+        "DummyWindow",
+        nullptr,
+        WS_OVERLAPPEDWINDOW,
+        0, 0, 100, 100,
+        nullptr, nullptr, wc.hInstance, nullptr
+    );
+
+    D3DPRESENT_PARAMETERS d3dpp{};
+    d3dpp.Windowed = TRUE;
+    d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    d3dpp.hDeviceWindow = hWnd;
+
+    IDirect3DDevice9* pDevice = nullptr;
+    if (FAILED(pD3D->CreateDevice(
+        D3DADAPTER_DEFAULT,
+        D3DDEVTYPE_HAL,
+        hWnd,
+        D3DCREATE_SOFTWARE_VERTEXPROCESSING,
+        &d3dpp,
+        &pDevice)))
+    {
+        DestroyWindow(hWnd);
+        UnregisterClassA("DummyWindow", wc.hInstance);
+        pD3D->Release();
+        return false;
+    }
+
+    void** vTable = *reinterpret_cast<void***>(pDevice);
+    void* pEndScene = vTable[42];
+
+    MH_Initialize();
+    MH_CreateHook(pEndScene, &hkEndScene, reinterpret_cast<void**>(&oEndScene));
+    MH_EnableHook(pEndScene);
+
+    pDevice->Release();
+    pD3D->Release();
+    DestroyWindow(hWnd);
+    UnregisterClassA("DummyWindow", wc.hInstance);
+
+    return true;
 }
 
 void patch(BYTE* ptr, BYTE* buf, size_t len) {
@@ -657,9 +782,9 @@ void applyNonSpeedrunPatches(RatataRConfig& cfg) {
     
     //Apply FOV
     patch((BYTE*)addresses.bypassFovOverflow, (BYTE*)"\xEB", 1); //BYPASS FOV OVERFLOW ERROR
-    patch((BYTE*)addresses.fov, reinterpret_cast<BYTE*>(&cfg.fov), sizeof(float));
-    patch((BYTE*)addresses.climbFov, reinterpret_cast<BYTE*>(&cfg.climbFOV), sizeof(float));
-    patch((BYTE*)addresses.runSlideFov, reinterpret_cast<BYTE*>(&cfg.runSlideFOV), sizeof(double));
+    patch((BYTE*)addresses.fov, reinterpret_cast<BYTE*>(&g_Fov.normal), sizeof(g_Fov.normal));
+    patch((BYTE*)addresses.climbFov, reinterpret_cast<BYTE*>(&g_Fov.climbing), sizeof(g_Fov.climbing));
+    patch((BYTE*)addresses.runSlideFov, reinterpret_cast<BYTE*>(&g_Fov.runningSliding), sizeof(g_Fov.runningSliding));
 
     if (cfg.improvedViewDistance) {
         //Use default far value
@@ -708,18 +833,109 @@ void applyNonSpeedrunPatches(RatataRConfig& cfg) {
     }
 }
 
-DWORD WINAPI MainThread(LPVOID param) {
-    TCHAR moduleFileName[MAX_PATH];
-    GetModuleFileNameA((HMODULE)param, (LPSTR)moduleFileName, MAX_PATH);
-    std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
-    std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
-    rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
+static bool PatchCall32(void* callInstrAddr, void* newTarget)
+{
+    auto p = reinterpret_cast<std::uint8_t*>(callInstrAddr);
 
-    if (!getSignatures(addresses)) {
-        SetEvent(readyEvent);
-        return 0;
+    if (p[0] != 0xE8) return false;
+
+    DWORD oldProt = 0;
+    if (!VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &oldProt))
+        return false;
+
+    std::int32_t rel = (std::int32_t)(
+        (std::uintptr_t)newTarget - ((std::uintptr_t)callInstrAddr + 5)
+    );
+
+    p[0] = 0xE8;
+    std::memcpy(p + 1, &rel, sizeof(rel));
+
+    FlushInstructionCache(GetCurrentProcess(), p, 5);
+
+    DWORD tmp = 0;
+    VirtualProtect(p, 5, oldProt, &tmp);
+    return true;
+}
+
+typedef unsigned int hdl;
+
+struct Color {
+    float r, g, b, a;
+};
+
+struct Vec2f {
+    float x, y;
+};
+
+struct FontParam_Z {
+    char* text;
+    bool hasBorder;
+    float borderOffset;
+    Color borderColor;
+    float topBoundY;
+    float bottomBoundY;
+    Vec2f position;
+    Color bottomColor;
+    Color topColor;
+    float scale1;
+    float scale2;
+    float zOffset;
+    Vec2f finalPosition;
+};
+
+char** systemDatasPtr = (char**)0x7de8dc;
+char** rdrPtr = (char**)0x7de8a4;
+char** classMgrPtr = (char**)0x7de8a8;
+char* (__fastcall* getPtr)(char* classMgr, int unused, hdl* id) = (char* (__fastcall*)(char*, int, hdl*))0x653280;
+char* (__fastcall* drawString)(char* font, int unused, FontParam_Z* fontParam) = (char* (__fastcall*)(char*, int, FontParam_Z*))0x5ce060;
+
+void __fastcall DrawFps() {
+    if (*systemDatasPtr == NULL || *rdrPtr == NULL || *classMgrPtr == NULL || getPtr == 0 || drawString == 0) {
+        return;
     }
+    DynArray_Z<hdl>* fonts = (DynArray_Z<hdl>*)(*systemDatasPtr + 0x18);
+    if (fonts->GetSize() == 0) {
+        return;
+    }
+    char* font = getPtr(*classMgrPtr, 0, &fonts->Get(0));
+    if (font == NULL) {
+        return;
+    }
+    Color purple = { 0.4f, 0.1f, 1.0f, 1.0f };
+    Color otherPurple = { 0.1f, 0.1f, 1.0f, 1.0f };
+    Color black = { 0.0f, 0.0f, 0.0f, 1.0f };
+    Vec2f position = { 4.0f, -2.0f };
+    FontParam_Z fontParam;
+    char fpsString[32];
+    float fps = *(float*)(*rdrPtr+0xc34);
 
+    _snprintf_s(
+        fpsString,
+        sizeof(fpsString),
+        _TRUNCATE,
+        "%.0f",
+        fps
+    );
+    fontParam.text = fpsString;
+    // possibly have an option to toggle border
+    fontParam.hasBorder = true;
+    fontParam.borderOffset = 2.0f;
+    // possibly have an option to change border color
+    fontParam.borderColor = black;
+    fontParam.topBoundY = -1.0f;
+    fontParam.bottomBoundY = -1.0f;
+    fontParam.position = position;
+    // possibly have an option to change colors
+    fontParam.bottomColor = purple;
+    fontParam.topColor = otherPurple;
+    // possibly have an option to change scale
+    fontParam.scale1 = 0.8f;
+    fontParam.scale2 = 1.0f;
+    fontParam.zOffset = 0.f;
+    drawString(font, 0, &fontParam);
+}
+
+void ApplyHooks(RatataRConfig& cfg) {
     DWORD hookAddressCursor = addresses.hookAddressCursor;
     DWORD hookAddressSetWindowPosPush = addresses.hookAddressSetWindowPosPush;
     DWORD hookAddressConsoleEnable = addresses.hookAddressConsoleEnable;
@@ -732,18 +948,59 @@ DWORD WINAPI MainThread(LPVOID param) {
     size_t hookLengthShowConsole = 6;
     size_t hookLengthFpsFix1 = 7;
     size_t hookLengthFpsFix2 = 5;
-    jmpBackAddressCursor = hookAddressCursor+hookLengthCursor;
-    jmpBackAddressSetWindowPosPush = hookAddressSetWindowPosPush+hookLengthSetWindowPosPush;
-    jmpBackAddressConsoleEnable = hookAddressConsoleEnable+hookLengthConsoleEnable;
-    jmpBackAddressShowConsole = hookAddressShowConsole+hookLengthShowConsole;
-    jmpBackAddressFpsFix1 = hookAddressFpsFix1+hookLengthFpsFix1;
-    jmpBackAddressFpsFix2 = hookAddressFpsFix2+hookLengthFpsFix2;
+    jmpBackAddressCursor = hookAddressCursor + hookLengthCursor;
+    jmpBackAddressSetWindowPosPush = hookAddressSetWindowPosPush + hookLengthSetWindowPosPush;
+    jmpBackAddressConsoleEnable = hookAddressConsoleEnable + hookLengthConsoleEnable;
+    jmpBackAddressShowConsole = hookAddressShowConsole + hookLengthShowConsole;
+    jmpBackAddressFpsFix1 = hookAddressFpsFix1 + hookLengthFpsFix1;
+    jmpBackAddressFpsFix2 = hookAddressFpsFix2 + hookLengthFpsFix2;
     hClipCursorAddress = addresses.hClipCursor;
     hFpsFix1Addr = addresses.hFpsFix1;
     cleanUp = addresses.hFpsFix2CleanUp;
     levelIdBaseAddr = addresses.levelIdBaseAddr;
     playerObjectsAddr = addresses.playerObjectsAddr;
     getIDAddr = addresses.getIDAddr;
+
+    hook((void*)hookAddressCursor, hClipCursor, hookLengthCursor);
+    if (cfg.displayMode == DisplayModes::Borderless) {
+        hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
+    }
+
+    else if (cfg.displayMode != DisplayModes::Fullscreen) {
+        hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
+    }
+
+    if (cfg.console) {
+        hook((void*)hookAddressConsoleEnable, hEnableConsole, hookLengthConsoleEnable);
+        hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
+    }
+
+    hook((void*)hookAddressFpsFix1, hFpsFix1, hookLengthFpsFix1);
+    hook((void*)hookAddressFpsFix2, hFpsFix2, hookLengthFpsFix2);
+
+    // Start rich presence thread
+    if (cfg.discordRichPresence) {
+        CreateThread(nullptr, 0, InitRPC, nullptr, 0, nullptr);
+    }
+
+    if (cfg.displayFrameCounter) {
+        PatchCall32((void*)addresses.patchDrawFpsAddr, (void*)&DrawFps);
+    }
+
+    HookD3D9EndScene();
+}
+
+DWORD WINAPI MainThread(LPVOID param) {
+    TCHAR moduleFileName[MAX_PATH];
+    GetModuleFileNameA((HMODULE)param, (LPSTR)moduleFileName, MAX_PATH);
+    std::string::size_type pos = std::string((char*)moduleFileName).find_last_of("\\/");
+    std::string configPath = std::string((char*)moduleFileName).substr(0, pos).append("\\").append("RatataRconfig.ini");
+    rootDirectory = std::string((char*)moduleFileName).substr(0, pos);
+
+    if (!getSignatures(addresses)) {
+        SetEvent(readyEvent);
+        return 0;
+    }
     
     RatataRConfig config;
     loadConfig(config, configPath);
@@ -752,23 +1009,7 @@ DWORD WINAPI MainThread(LPVOID param) {
     if (!config.speedrunMode) {
         applyNonSpeedrunPatches(config);
     }
-
-    hook((void*)hookAddressCursor,hClipCursor,hookLengthCursor);
-    if (config.displayMode == DisplayModes::Borderless) {
-        hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushBL, hookLengthSetWindowPosPush);
-    }
-
-    else if (config.displayMode != DisplayModes::Fullscreen) {
-        hook((void*)hookAddressSetWindowPosPush, hSetWindowPosPushWND, hookLengthSetWindowPosPush);
-    }
-
-    if (config.console) {
-        hook((void*)hookAddressConsoleEnable, hEnableConsole, hookLengthConsoleEnable);
-        hook((void*)hookAddressShowConsole, hShowConsole, hookLengthShowConsole);
-    }
-
-    hook((void*)hookAddressFpsFix1,hFpsFix1,hookLengthFpsFix1);
-    hook((void*)hookAddressFpsFix2,hFpsFix2,hookLengthFpsFix2);
+    ApplyHooks(config);
 
     SetEvent(readyEvent);
 
@@ -779,8 +1020,9 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
         case DLL_PROCESS_ATTACH:
             readyEvent = CreateEventA(nullptr, TRUE, FALSE, "RatataR_Patched");
-            CreateThread(0,0,MainThread,hModule,0,0);
+            DisableThreadLibraryCalls(hModule);
+            CreateThread(nullptr, 0, MainThread, hModule, 0, nullptr);
             break;
     }
-    return true;
+    return TRUE;
 }
