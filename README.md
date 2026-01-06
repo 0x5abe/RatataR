@@ -1,28 +1,20 @@
 # RatataR
 
-RatataR is a custom launcher for the PC version of Ratatouille.
-It currently supports overlay.exe for the USA version of Ratatouille.
+A launcher designed to enhance the experience of the **Ratatouille** video game for PC.
 
-## List of features
-- Custom resolution
-- Windowed mode
-- Borderless mode
-- Developer console
-- Popup menu
-- Invert mouse on the Y-axis
-- Custom Field Of View
-- Remove framerate cap
-- No CD patch
-- Auto save toggle
-- Disable bonking
-- Fog toggle
-- Visual improvements
-- Speedrun mode
+> [!NOTE]
+> Some game versions may not be supported. If you're having problems, feel free to open up an issue.
+
+## Features
+- Custom Resolution
+- Windowed/Borderless Mode
+- Developer Tools
+- Graphical and Gameplay Improvements
+- Frame Limiter
+- No Disc Requirement
 
 ### Planned features
-- Support for other versions of the game
-- Overall rewrite of the tool using minhook, for more extensive modding
-- Fps counter and limiter
+- Overall rewrite of the tool using MinHook for more extensive modding.
 
 ## Usage
 
@@ -30,53 +22,21 @@ Download the latest version from the [Releases section](https://github.com/SabeM
 
 <p>Unzip the files to your Ratatouille game folder, which is typically found at the following path: <br>C:\Program Files (x86)\THQ\Disney-Pixar\Ratatouille\Rat</p>
 
-Run RatataR.exe to launch the game with RatataR.
+Run **RatataR.exe** to launch the game with RatataR.
 
-By default, the game gets set to the resolution of your primary display. You can adjust these settings by editing the RatataRconfig.ini file with a text editor. The available options are:
-  
-- Window Mode:
-  - Windowed: The game runs in a window, allowing for seamless multitasking.
+You can adjust settings by editing RatataRconfig.ini with a text editor.
+> [!TIP]
+> You may need to run your text editor with **administrator privileges** if editing the file while it's 
+inside the game folder.
 
-  - Fullscreen: Uses the game's native fullscreen mode to occupie the entire screen. May cause compatibility issues with screen capture software. Please be aware that the game's display resolution is determined by the settings configured in the gamesetup.exe graphics settings.
-
-  - Borderless: The game operates within a window but with no borders, providing the illusion of fullscreen while retaining the ability to easily multitask.
-
-- Screen Resolution:
-  - Set the width and height in pixels using the **width** and **height** parameters.
-
-- Improved View Distance: [OFF / ON]
-  - Greatly enhances the render distance and forces max lod on all meshes. This can heavily impact performance due to the game being very cpu bound.
-
-- Fog: [OFF / ON]
-  - Toggle the fog.
-
-- Developer Console: [OFF / ON]
-  - Show/hide the console window.
-
-- Popup Menu: [OFF / ON]
-  - Toggles the popup menu, accessible with a right-click.
-
-- Invert Vertical Look: [OFF / ON]
-  - Inverts the mouse Y-axis.
-
-- Auto Save: [OFF / ON]
-  - Toggles the games autosaving feature.
-
-- Field Of View: [1-155]
-  - Adjust the field of view.
-
-- Remove FPS Cap: [OFF / ON]
-  - Removes the 500 fps cap enforced by the game.
-
-- No Bonks: [OFF / ON]
-  - Disable the bonks that occurs when dashing.
-
-- Speedrun Mode: [OFF / ON]
-  - Disables modifications that are not legal for speedrunning.
-
-### No disc patch
+### Play without disc
+If you want the ability to play without needing to have the disc inserted, you need to copy the game files from the disc into the game directory.
 1. If you have multiple discs, mount/insert the second game disc.
 2. Open File Explorer.
-3. Navigate to the "RAT2" disc.
-4. Go to the "View" tab and select "Show" and then "Hidden Items."
+3. Navigate to the **RAT2** disc.
+4. Go to the **View** tab and select **Show** and then **Hidden Items**.
 5. Copy the "MUSIC" and "VIDEOS" folders into the root of the game folder.
+
+# DISCLAIMER
+This application is a fan-made project and is in no way affiliated with or approved by **Disney Pixar**, **Asobo Studio**, **THQ**, or any other copyright holders.
+No copyrighted game assets are distributed and a legally obtained copy of **Ratatouille** is required to use **RatataR**.
