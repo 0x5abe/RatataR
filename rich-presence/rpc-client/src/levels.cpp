@@ -1,38 +1,11 @@
-#pragma once
-#include <Windows.h>
+#include "levels.h"
 
-template<typename T, typename Ptr>
-T* safe_deref_chain(Ptr base, std::initializer_list<uintptr_t> offsets, bool applyOffsetAfterLastDeref = true) {
-    if (!base) return nullptr;
-    char* addr = reinterpret_cast<char*>(base);
+DWORD levelIdBaseAddr;
+DWORD playerObjectsAddr;
+DWORD getIDAddr;
 
-    size_t i = 0;
-    for (auto offset : offsets) {
-        if (!addr) return nullptr;
-
-        addr = *reinterpret_cast<char**>(addr);
-        if (!addr) return nullptr;
-
-        if (i < offsets.size() - 1 || applyOffsetAfterLastDeref) {
-            addr += offset;
-        }
-        i++;
-    }
-    return reinterpret_cast<T*>(addr);
-}
-
-extern DWORD levelIdBaseAddr;
-extern DWORD playerObjectsAddr;
-extern DWORD getIDAddr;
-
-int*** playerObjects;
-int(__cdecl* getIDFn)(const char* name, int startingIndx);
-
-struct Level {
-    char key;
-    const char* name;
-    const char* imageName;
-};
+int*** playerObjects = nullptr;
+int(__cdecl* getIDFn)(const char* name, int startingIndx) = nullptr;
 
 Level constexpr levelList[] = {
     { 0, "In Menu", "bootingup" },
@@ -90,6 +63,26 @@ Level constexpr levelList[] = {
     { 52, "Test_Julien", "bootingup" }
 };
 constexpr int levelCount = sizeof(levelList) / sizeof(Level) - 1;
+
+template<typename T, typename Ptr>
+T* safe_deref_chain(Ptr base, std::initializer_list<uintptr_t> offsets, bool applyOffsetAfterLastDeref) {
+    if (!base) return nullptr;
+    char* addr = reinterpret_cast<char*>(base);
+
+    size_t i = 0;
+    for (auto offset : offsets) {
+        if (!addr) return nullptr;
+
+        addr = *reinterpret_cast<char**>(addr);
+        if (!addr) return nullptr;
+
+        if (i < offsets.size() - 1 || applyOffsetAfterLastDeref) {
+            addr += offset;
+        }
+        i++;
+    }
+    return reinterpret_cast<T*>(addr);
+}
 
 void initRat()
 {

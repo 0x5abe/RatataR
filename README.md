@@ -35,8 +35,20 @@ If you want the ability to play without needing to have the disc inserted, you n
 2. Open File Explorer.
 3. Navigate to the **RAT2** disc.
 4. Go to the **View** tab and select **Show** and then **Hidden Items**.
-5. Copy the "MUSIC" and "VIDEOS" folders into the root of the game folder.
+5. Copy the **MUSIC** and **VIDEOS** folders into the root of the game folder.
+
+# Credits
+**RatataR** makes use of third-party libraries:
+- **MinHook** — A Minimalistic API Hooking Library for x64/x86  
+Copyright (C) 2009-2017 Tsuda Kageyu.
+
+- **Hacker Disassembler Engine 32 C**  
+Copyright (c) 2008-2009, Vyacheslav Patkov.
+
+- **Discord rich-presence** by [Jay!](https://twhl.info/user/view/7970).
+
+See [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) for details.
 
 # DISCLAIMER
-This application is a fan-made project and is in no way affiliated with or approved by **Disney Pixar**, **Asobo Studio**, **THQ**, or any other copyright holders.
+This application is a fan-made project and is in no way affiliated with or approved by **Disney Pixar**, **Asobo Studio**, **THQ**, or any other copyright holder.
 No copyrighted game assets are distributed and a legally obtained copy of **Ratatouille** is required to use **RatataR**.

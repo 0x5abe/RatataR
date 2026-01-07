@@ -5,7 +5,8 @@
 #include <vector>
 #include <sstream>
 #include <d3d9.h>
-#include "rich-presence/rpc.h"
+#include "rpc.h"
+#include "levels.h"
 #include "DynArray_Z.h"
 #include "MinHook.h"
 
@@ -167,9 +168,6 @@ struct PatchAddresses
 };
 
 std::string rootDirectory;
-DWORD levelIdBaseAddr;
-DWORD playerObjectsAddr;
-DWORD getIDAddr;
 PatchAddresses addresses{};
 
 enum DisplayModes {

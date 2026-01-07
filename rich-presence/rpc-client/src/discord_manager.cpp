@@ -1,14 +1,17 @@
 // ================================================== \\
 // Discord RPC implemenatation
+// Based on code from the Valve Dev Community wiki
 // 
 // Jay - 2022
 // ================================================== \\
-//include "discord_manager.h"
+
 #include <string.h>
-#include <iostream>
 #include <time.h>
-#include "include/discord-rpc/include/discord_rpc.h"
+#include <iostream>
+#include "discord_manager.h"
+#include "discord_rpc.h"
 #include "levels.h"
+
 static DiscordRichPresence discordPresence;
 
 // Blank handlers; not required for singleplayer Half-Life
@@ -18,7 +21,8 @@ static void HandleDiscordError(int errcode, const char* message) {}
 static void HandleDiscordJoin(const char* secret) {}
 static void HandleDiscordSpectate(const char* secret) {}
 static void HandleDiscordJoinRequest(const DiscordUser* request) {}
-// Default logo to use as a fallback
+
+const char* appID = "1219347301521162331";
 const char* defaultLogo = "bootingup";
 
 void DiscordMan_Startup(void)
@@ -35,7 +39,7 @@ void DiscordMan_Startup(void)
 	handlers.spectateGame = HandleDiscordSpectate;
 	handlers.joinRequest = HandleDiscordJoinRequest;
 
-	Discord_Initialize("1219347301521162331", &handlers, 1, 0);
+	Discord_Initialize(appID, &handlers, 1, 0);
 
 	memset(&discordPresence, 0, sizeof(discordPresence));
 
@@ -47,6 +51,7 @@ void DiscordMan_Startup(void)
 
 	Discord_UpdatePresence(&discordPresence);
 }
+
 int pass = 0;
 void DiscordMan_Update(void)
 {
@@ -55,8 +60,10 @@ void DiscordMan_Update(void)
 
 	sprintf_s(curImage, "bootingup");
 	Level curLevel = getLevel();
+
 	discordPresence.details = getCharName();
 	discordPresence.state = curLevel.name;
+
 	if (!pass) {
 		discordPresence.largeImageKey = curImage;
 		pass++;
