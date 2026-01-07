@@ -11,6 +11,39 @@
 
 HANDLE readyEvent = nullptr;
 
+typedef unsigned int hdl;
+
+struct Color {
+    float r, g, b, a;
+};
+
+struct Vec2f {
+    float x, y;
+};
+
+struct FontParam_Z {
+    char* text;
+    bool hasBorder;
+    float borderOffset;
+    Color borderColor;
+    float topBoundY;
+    float bottomBoundY;
+    Vec2f position;
+    Color bottomColor;
+    Color topColor;
+    float scale1;
+    float scale2;
+    float zOffset;
+    Vec2f finalPosition;
+};
+
+static char** systemDatasPtr = nullptr;
+static char** rdrPtr = nullptr;
+static char** classMgrPtr = nullptr;
+static char* (__fastcall* getPtr)(char* classMgr, int unused, hdl* id) = nullptr;
+static char* (__fastcall* drawString)(char* font, int unused, FontParam_Z* fontParam) = nullptr;
+
+
 using EndScene_t = HRESULT(__stdcall*)(IDirect3DDevice9*);
 EndScene_t static oEndScene = nullptr;
 
@@ -462,12 +495,17 @@ bool getSignatures(PatchAddresses& address)
     FIND_SIG_OR_FAIL(ptr, "8b 15 ?? ?? ?? ?? 8b 1c 82");
     address.playerObjectsAddr = ReadPtr32(ptr + 0x2);
 
-    FIND_SIG_OR_FAIL(address.systemDatasPtrAddr, "8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? 8b 11 8b 42 ?? ff d0 8b 0d");
-    FIND_SIG_OR_FAIL(address.rdrPtrAddr, "a1 ?? ?? ?? ?? 8b 90 ?? ?? ?? ?? 8b 80 ?? ?? ?? ?? 89 54 24");
-    FIND_SIG_OR_FAIL(address.classMgrPtrAddr, "8b 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? c2 ?? ?? cc cc cc cc cc cc 8b 44 24");
+    FIND_SIG_OR_FAIL(ptr, "8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 85 c9 74 ?? 8b 11 8b 42 ?? ff d0 8b 0d");
+    address.systemDatasPtrAddr = ReadPtr32(ptr + 0x2);
+
+    FIND_SIG_OR_FAIL(ptr, "a1 ?? ?? ?? ?? 8b 90 ?? ?? ?? ?? 8b 80 ?? ?? ?? ?? 89 54 24");
+    address.rdrPtrAddr = ReadPtr32(ptr + 0x1);
+    
+    FIND_SIG_OR_FAIL(ptr, "8b 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? c2 ?? ?? cc cc cc cc cc cc 8b 44 24");
+    address.classMgrPtrAddr = ReadPtr32(ptr + 0x2);
+
     FIND_SIG_OR_FAIL(address.getPtrAddr, "83 05 ?? ?? ?? ?? ?? 8b 54 24");
     FIND_SIG_OR_FAIL(address.drawStringAddr, "55 8b ec 83 e4 ?? 81 ec ?? ?? ?? ?? 53 56 8b 75 ?? 80 7e ?? ?? d9 46");
-
     FIND_SIG_OR_FAIL(address.patchDrawFpsAddr, "e8 ?? ?? ?? ?? 8b e5 5d c2 ?? ?? cc cc cc 83 ec");
 
     return true;
@@ -861,38 +899,6 @@ static bool PatchCall32(void* callInstrAddr, void* newTarget)
     return true;
 }
 
-typedef unsigned int hdl;
-
-struct Color {
-    float r, g, b, a;
-};
-
-struct Vec2f {
-    float x, y;
-};
-
-struct FontParam_Z {
-    char* text;
-    bool hasBorder;
-    float borderOffset;
-    Color borderColor;
-    float topBoundY;
-    float bottomBoundY;
-    Vec2f position;
-    Color bottomColor;
-    Color topColor;
-    float scale1;
-    float scale2;
-    float zOffset;
-    Vec2f finalPosition;
-};
-
-char** systemDatasPtr = (char**)0x7de8dc;
-char** rdrPtr = (char**)0x7de8a4;
-char** classMgrPtr = (char**)0x7de8a8;
-char* (__fastcall* getPtr)(char* classMgr, int unused, hdl* id) = (char* (__fastcall*)(char*, int, hdl*))0x653280;
-char* (__fastcall* drawString)(char* font, int unused, FontParam_Z* fontParam) = (char* (__fastcall*)(char*, int, FontParam_Z*))0x5ce060;
-
 void __fastcall DrawFps() {
     if (*systemDatasPtr == NULL || *rdrPtr == NULL || *classMgrPtr == NULL || getPtr == 0 || drawString == 0) {
         return;
@@ -964,6 +970,12 @@ void ApplyHooks(RatataRConfig& cfg) {
     levelIdBaseAddr = addresses.levelIdBaseAddr;
     playerObjectsAddr = addresses.playerObjectsAddr;
     getIDAddr = addresses.getIDAddr;
+
+    systemDatasPtr = (char**)addresses.systemDatasPtrAddr;
+    rdrPtr = (char**)addresses.rdrPtrAddr;
+    classMgrPtr = (char**)addresses.classMgrPtrAddr;
+    getPtr = (char* (__fastcall*)(char*, int, hdl*))addresses.getPtrAddr;
+    drawString = (char* (__fastcall*)(char*, int, FontParam_Z*))addresses.drawStringAddr;
 
     hook((void*)hookAddressCursor, hClipCursor, hookLengthCursor);
     if (cfg.displayMode == DisplayModes::Borderless) {
