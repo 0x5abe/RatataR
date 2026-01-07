@@ -12,11 +12,11 @@
 HANDLE readyEvent = nullptr;
 
 using EndScene_t = HRESULT(__stdcall*)(IDirect3DDevice9*);
-EndScene_t oEndScene = nullptr;
+EndScene_t static oEndScene = nullptr;
 
 // Frame limiter
 static LARGE_INTEGER g_QPCFreq;
-static LARGE_INTEGER g_LastLimitTime;
+static LARGE_INTEGER g_NextFrameTime;
 static bool g_TimerInitialized = false;
 static bool g_EnableFrameLimit = false;
 static double g_TargetFPS = 60.0;
@@ -593,35 +593,39 @@ void __declspec(naked) hFpsFix2() {
 
 void InitTimers() {
     QueryPerformanceFrequency(&g_QPCFreq);
-    QueryPerformanceCounter(&g_LastLimitTime);
+    QueryPerformanceCounter(&g_NextFrameTime);
     g_TimerInitialized = true;
 }
 
 void ApplyFrameLimit() {
+    const double targetFrameTime = 1.0 / g_TargetFPS;
+    const LONGLONG targetTicks = static_cast<LONGLONG>(targetFrameTime * g_QPCFreq.QuadPart);
+
     LARGE_INTEGER now;
-    QueryPerformanceCounter(&now);
 
-    double elapsed = double(now.QuadPart - g_LastLimitTime.QuadPart) /
-        double(g_QPCFreq.QuadPart);
+    while (true) {
+        QueryPerformanceCounter(&now);
 
-    double targetFrameTime = 1.0 / g_TargetFPS;
+        LONGLONG remainingTicks = g_NextFrameTime.QuadPart - now.QuadPart;
+        if (remainingTicks <= 0)
+            break;
 
-    if (elapsed < targetFrameTime)
-    {
-        double remaining = targetFrameTime - elapsed;
-
-        if (remaining > 0.001)
-            Sleep(DWORD((remaining - 0.001) * 1000.0));
-
-        do {
-            QueryPerformanceCounter(&now);
-            elapsed =
-                double(now.QuadPart - g_LastLimitTime.QuadPart) /
-                double(g_QPCFreq.QuadPart);
-        } while (elapsed < targetFrameTime);
+        double remainingSeconds = double(remainingTicks) / double(g_QPCFreq.QuadPart);
+        
+        if (remainingSeconds > 0.001) {
+            Sleep(DWORD((remainingSeconds - 0.001) * 1000.0));
+        }
+        else {
+            YieldProcessor();
+        }
     }
 
-    g_LastLimitTime = now;
+    g_NextFrameTime.QuadPart += targetTicks;
+
+    QueryPerformanceCounter(&now);
+    if (g_NextFrameTime.QuadPart < now.QuadPart - targetTicks) {
+        g_NextFrameTime = now;
+    }
 }
 
 HRESULT __stdcall hkEndScene(IDirect3DDevice9* pDevice) {
