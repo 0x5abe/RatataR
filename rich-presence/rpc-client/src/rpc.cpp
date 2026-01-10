@@ -12,5 +12,5 @@ DWORD WINAPI InitRPC(LPVOID lpParameter) {
 		Sleep(UpdateFreq);
 	}
 
-	return TRUE;
+	return 0;
 }

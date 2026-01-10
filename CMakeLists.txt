@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(RatataR VERSION 1.0.0)
 
-add_library(hook SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/hook.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/discord_manager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/levels.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/rpc.cpp
+add_library(hook
+    SHARED
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/hook.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/discord_manager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/levels.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/rpc.cpp
 )
 
 target_link_libraries(hook
@@ -14,6 +15,10 @@ target_link_libraries(hook
     ${CMAKE_CURRENT_SOURCE_DIR}/external/MinHook/lib/libMinHook.x86.lib
     ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/discord-rpc/lib/discord-rpc.lib
 )
+
+target_link_options(hook PRIVATE "/DELAYLOAD:discord-rpc.dll")
+
+target_link_libraries(hook delayimp)
 
 add_custom_command(
     TARGET hook

@@ -44,7 +44,6 @@ static char** classMgrPtr = nullptr;
 static char* (__fastcall* getPtr)(char* classMgr, int unused, hdl* id) = nullptr;
 static char* (__fastcall* drawString)(char* font, int unused, FontParam_Z* fontParam) = nullptr;
 
-
 using EndScene_t = HRESULT(__stdcall*)(IDirect3DDevice9*);
 EndScene_t static oEndScene = nullptr;
 
@@ -170,7 +169,7 @@ struct PatchAddresses
 std::string rootDirectory;
 PatchAddresses addresses{};
 
-enum DisplayModes {
+enum class DisplayModes {
     Windowed,
     Borderless,
     Fullscreen
@@ -203,9 +202,9 @@ struct RatataRConfig {
 };
 
 DisplayModes parseDisplayMode(const char* value) {
-    if (strcmp(value, "WINDOWED") == 0) return Windowed;
-    if (strcmp(value, "FULLSCREEN") == 0) return Fullscreen;
-    return Borderless;
+    if (strcmp(value, "WINDOWED") == 0) return DisplayModes::Windowed;
+    if (strcmp(value, "FULLSCREEN") == 0) return DisplayModes::Fullscreen;
+    return DisplayModes::Borderless;
 }
 
 struct IntOption {
@@ -341,10 +340,10 @@ std::vector<int> PatternToBytes(const std::string& pattern)
 
 ModuleInfo GetMainModule()
 {
-    HMODULE overlay = GetModuleHandle(nullptr);
+    HMODULE main = GetModuleHandle(nullptr);
 
     MODULEINFO info{};
-    GetModuleInformation(GetCurrentProcess(), overlay, &info, sizeof(info));
+    GetModuleInformation(GetCurrentProcess(), main, &info, sizeof(info));
 
     return {
         (uintptr_t)info.lpBaseOfDll,
@@ -504,7 +503,7 @@ bool getSignatures(PatchAddresses& address)
 
     FIND_SIG_OR_FAIL(address.getPtrAddr, "83 05 ?? ?? ?? ?? ?? 8b 54 24");
     FIND_SIG_OR_FAIL(address.drawStringAddr, "55 8b ec 83 e4 ?? 81 ec ?? ?? ?? ?? 53 56 8b 75 ?? 80 7e ?? ?? d9 46");
-    FIND_SIG_OR_FAIL(address.patchDrawFpsAddr, "e8 ?? ?? ?? ?? 8b e5 5d c2 ?? ?? cc cc cc 83 ec");
+    FIND_SIG_OR_FAIL(address.patchDrawFpsAddr, "e8 ?? ?? ?? ?? 8b e5 5d c2 ?? ?? cc cc cc cc cc cc cc cc cc e8");
 
     return true;
 }
@@ -994,7 +993,23 @@ void ApplyHooks(RatataRConfig& cfg) {
 
     // Start rich presence thread
     if (cfg.discordRichPresence) {
-        CreateThread(nullptr, 0, InitRPC, nullptr, 0, nullptr);
+        constexpr char* rpcLibName = "discord-rpc.dll";
+        while (true) {
+            HMODULE hDiscord = LoadLibraryA(rpcLibName);
+            if (!hDiscord) {
+                char buffer[256];
+                sprintf_s(buffer, sizeof(buffer), "Unable to initialize Discord Rich Presence.\nMake sure to extract %s into the game directory.", rpcLibName);
+                int choice = MessageBoxA(nullptr, buffer, "RatataR", MB_RETRYCANCEL | MB_ICONERROR);
+                if (choice == IDRETRY)
+                    continue;
+                else
+                    break;
+            }
+            else {
+                CreateThread(nullptr, 0, InitRPC, nullptr, 0, nullptr);
+                break;
+            }
+        }
     }
 
     if (cfg.displayFrameCounter) {
