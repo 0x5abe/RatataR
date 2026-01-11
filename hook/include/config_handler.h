@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 #include <string>
 
 enum class DisplayModes {

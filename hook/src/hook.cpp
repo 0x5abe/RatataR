@@ -204,8 +204,8 @@ ModuleInfo GetMainModule()
     GetModuleInformation(GetCurrentProcess(), main, &info, sizeof(info));
 
     return {
-        (uintptr_t)info.lpBaseOfDll,
-        (size_t)info.SizeOfImage
+        .base = (uintptr_t)info.lpBaseOfDll,
+        .size = (size_t)info.SizeOfImage
     };
 }
 
@@ -846,7 +846,7 @@ void ApplyHooks(RatataRConfig& cfg) {
 
     // Start rich presence thread
     if (cfg.discordRichPresence) {
-        constexpr char* rpcLibName = "discord-rpc.dll";
+        constexpr char rpcLibName[] = "discord-rpc.dll";
         while (true) {
             HMODULE hDiscord = LoadLibraryA(rpcLibName);
             if (!hDiscord) {

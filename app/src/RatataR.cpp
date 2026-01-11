@@ -32,7 +32,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         &si,
         &pi
     )) {
-        MessageBoxA(nullptr, "Unable to launch Ratatouille.", "RatataR", MB_OK | MB_ICONERROR);
+        MessageBoxA(nullptr, "Unable to launch Ratatouille. Make sure to extract the files into the game directory.", "RatataR", MB_OK | MB_ICONERROR);
         return 1;
     }
 

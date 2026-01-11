@@ -85,11 +85,11 @@ RemyFOV getFOV(RatataRConfig& cfg) {
     constexpr double RUNNING_SLIDING_RATIO = 110.0 / 95.0;
 
     float userFOV = static_cast<float>(cfg.fov);
-    RemyFOV g_Fov;
-    g_Fov.normal = userFOV;
-    g_Fov.climbing = CLIMBING_RATIO * userFOV;
-    g_Fov.runningSliding = static_cast<float>(RUNNING_SLIDING_RATIO * userFOV);
-    return g_Fov;
+    return {
+        .normal = userFOV,
+        .climbing = CLIMBING_RATIO * userFOV,
+        .runningSliding = static_cast<float>(RUNNING_SLIDING_RATIO * userFOV)
+    };
 }
 
 DisplayModes ConfigHandler::ParseDisplayMode(const char* value) {

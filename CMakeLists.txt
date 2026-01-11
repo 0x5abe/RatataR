@@ -1,50 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
-project(RatataR VERSION 1.0.0)
+project(RatataR LANGUAGES CXX)
 
-add_library(hook
-    SHARED
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/hook.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/config_handler.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/discord_manager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/levels.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/rpc.cpp
-)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(RATATAR_OUTPUT_DIR "${CMAKE_BINARY_DIR}/RatataR")
 
-target_link_libraries(hook
-    Winmm
-    d3d9
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/MinHook/lib/libMinHook.x86.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/discord-rpc/lib/discord-rpc.lib
-)
-
-target_link_options(hook PRIVATE "/DELAYLOAD:discord-rpc.dll")
-
-target_link_libraries(hook delayimp)
-
-add_custom_command(
-    TARGET hook
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/discord-rpc/bin/discord-rpc.dll
-            $<TARGET_FILE_DIR:hook>
-)
-
-target_include_directories(hook PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/    
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/discord-rpc/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/MinHook/include
-)
-
-add_executable(RatataR WIN32
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/RatataR.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/resources/RatataR.rc
-)
-
-target_link_libraries(RatataR
-    Winmm
-    kernel32
-    user32
-)
-
-set_target_properties(RatataR PROPERTIES OUTPUT_NAME "RatataR")
+add_subdirectory(external/minhook)
+add_subdirectory(external/discord-rpc)
+add_subdirectory(app)
+add_subdirectory(hook)
