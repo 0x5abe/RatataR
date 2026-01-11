@@ -9,6 +9,7 @@
 #include "levels.h"
 #include "DynArray_Z.h"
 #include "MinHook.h"
+#include "config_handler.h"
 
 HANDLE readyEvent = nullptr;
 
@@ -168,149 +169,6 @@ struct PatchAddresses
 
 std::string rootDirectory;
 PatchAddresses addresses{};
-
-enum class DisplayModes {
-    Windowed,
-    Borderless,
-    Fullscreen
-};
-
-struct RemyFOV {
-    float normal;
-    float climbing;
-    double runningSliding;
-};
-RemyFOV g_Fov = { 95.0f, 110.0f, 110.0};
-
-struct RatataRConfig {
-    unsigned int width;
-    unsigned int height;
-    unsigned int maxFps;
-    unsigned int fov;
-    bool console;
-    bool popupMenu;
-    bool invertVerticalLook;
-    bool removeFpsCap;
-    bool autoSave;
-    bool improvedViewDistance;
-    bool fog;
-    bool noBonks;
-    bool speedrunMode;
-    bool discordRichPresence;
-    bool displayFrameCounter;
-    DisplayModes displayMode;
-};
-
-DisplayModes parseDisplayMode(const char* value) {
-    if (strcmp(value, "WINDOWED") == 0) return DisplayModes::Windowed;
-    if (strcmp(value, "FULLSCREEN") == 0) return DisplayModes::Fullscreen;
-    return DisplayModes::Borderless;
-}
-
-struct IntOption {
-    const char* key;
-    unsigned int RatataRConfig::* member;
-    int def;
-};
-
-struct BoolOption {
-    const char* key;
-    bool RatataRConfig::* member;
-    bool def;
-};
-
-void loadConfig(RatataRConfig& cfg, const std::string& configPath) {
-    const char* sectionName = "CONFIG";
-
-    IntOption intOptions[] = {
-        {"width",                       &RatataRConfig::width,                            0},
-        {"height",                      &RatataRConfig::height,                           0},
-        {"maxFps",                      &RatataRConfig::maxFps,                           0},
-        {"fov",                         &RatataRConfig::fov,                              95},
-    };
-
-    BoolOption boolOptions[] = {
-        {"console",                     &RatataRConfig::console,                       false},
-        {"popupMenu",                   &RatataRConfig::popupMenu,                     false},
-        {"invertVerticalLook",          &RatataRConfig::invertVerticalLook,            false},
-        {"removeFpsCap",                &RatataRConfig::removeFpsCap,                  false},
-        {"autoSave",                    &RatataRConfig::autoSave,                      true},
-        {"improvedViewDistance",        &RatataRConfig::improvedViewDistance,          false},
-        {"fog",                         &RatataRConfig::fog,                           true},
-        {"noBonks",                     &RatataRConfig::noBonks,                       false},
-        {"speedrunMode",                &RatataRConfig::speedrunMode,                  false},
-        {"discordRichPresence",         &RatataRConfig::discordRichPresence,           false},
-        {"displayFrameCounter",         &RatataRConfig::displayFrameCounter,           false},
-    };
-
-    // Get int options
-    for (const auto& opt : intOptions) {
-        cfg.*(opt.member) = GetPrivateProfileIntA(
-            sectionName,
-            opt.key,
-            opt.def,
-            configPath.c_str()
-        );
-    }
-
-    // Get boolean options
-    for (const auto& opt : boolOptions) {
-        cfg.*(opt.member) = GetPrivateProfileIntA(
-            sectionName,
-            opt.key,
-            opt.def ? 1 : 0,
-            configPath.c_str()
-        ) != 0;
-    }
-
-    // Get display mode
-    char displayModeBuffer[32];
-    GetPrivateProfileStringA(
-        sectionName,
-        "displayMode",
-        "BORDERLESS",
-        displayModeBuffer,
-        sizeof(displayModeBuffer),
-        configPath.c_str()
-    );
-
-    for (size_t i = 0; displayModeBuffer[i] != '\0'; i++) {
-        displayModeBuffer[i] = static_cast<char>(
-            std::toupper(static_cast<unsigned char>(displayModeBuffer[i]))
-        );
-    }
-
-    cfg.displayMode = parseDisplayMode(displayModeBuffer);
-
-    // Field Of View
-    constexpr float fovMin = 1.0f;
-    constexpr float fovMax = 155.0f;
-    constexpr float CLIMBING_RATIO = 110.0f / 95.0f;
-    constexpr double RUNNING_SLIDING_RATIO = 110.0 / 95.0;
-    float userFOV = static_cast<float>(cfg.fov);
-
-    // Clamp
-    if (userFOV < fovMin) userFOV = fovMin;
-    else if (userFOV > fovMax) userFOV = fovMax;
-
-    g_Fov.normal = userFOV;
-    g_Fov.climbing = CLIMBING_RATIO * userFOV;
-    g_Fov.runningSliding = RUNNING_SLIDING_RATIO * userFOV;
-
-    // Set to screen resolution if width is 0
-    if (cfg.width == 0) {
-        cfg.width = GetSystemMetrics(SM_CXSCREEN);
-    }
-
-    // Set to screen resolution if height is 0
-    if (cfg.height == 0) {
-        cfg.height = GetSystemMetrics(SM_CYSCREEN);
-    }
-
-    // Frame Limit
-    g_EnableFrameLimit = cfg.maxFps > 0.0;
-    g_TargetFPS = static_cast<double>(cfg.maxFps);
-}
 
 struct ModuleInfo {
     uintptr_t base;
@@ -528,8 +386,8 @@ bool hook(void *toHook, void *ourFunc, size_t len) {
     return true;
 }
 
-DWORD hClipCursorAddress;
-DWORD jmpBackAddressCursor;
+uintptr_t hClipCursorAddress;
+uintptr_t jmpBackAddressCursor;
 void __declspec(naked) hClipCursor() {
     __asm {
         call GetClientRect
@@ -545,7 +403,7 @@ void __declspec(naked) hClipCursor() {
     }
 }
 
-DWORD jmpBackAddressSetWindowPosPush;
+uintptr_t jmpBackAddressSetWindowPosPush;
 void __declspec(naked) hSetWindowPosPushBL() {
     __asm {
         push 0x0
@@ -567,7 +425,7 @@ void __declspec(naked) hSetWindowPosPushWND() {
     }
 }
 
-DWORD jmpBackAddressConsoleEnable;
+uintptr_t jmpBackAddressConsoleEnable;
 void __declspec(naked) hEnableConsole() {
     __asm {
         or dword ptr ds:[ecx+0x6C6C],eax
@@ -602,8 +460,8 @@ void __declspec(naked) hShowConsole() {
     }
 }
 
-DWORD hFpsFix1Addr;
-DWORD jmpBackAddressFpsFix1;
+uintptr_t hFpsFix1Addr;
+uintptr_t jmpBackAddressFpsFix1;
 void __declspec(naked) hFpsFix1() {
     __asm {
         mov eax, [hFpsFix1Addr]
@@ -614,11 +472,11 @@ void __declspec(naked) hFpsFix1() {
     }
 }
 
-DWORD jmpBackAddressFpsFix2;
-DWORD cleanUp;
+uintptr_t jmpBackAddressFpsFix2;
+uintptr_t cleanUpFpsFix2;
 void __declspec(naked) hFpsFix2() {
     __asm {
-        mov eax, [cleanUp]
+        mov eax, [cleanUpFpsFix2]
         call eax
         push 0x1
         call timeEndPeriod
@@ -753,8 +611,11 @@ void applyBasePatches(RatataRConfig& cfg) {
     //Setting custom res
     if (cfg.displayMode != DisplayModes::Fullscreen) {
         patch((BYTE*)addresses.customResPatch1, zero, 1);
-        patch((BYTE*)addresses.customResPatch2, reinterpret_cast<BYTE*>(&cfg.width), 2);
-        patch((BYTE*)addresses.customResPatch3, reinterpret_cast<BYTE*>(&cfg.height), 2);
+
+        auto screenW = static_cast<uint16_t>(cfg.width != 0 ? cfg.width : GetSystemMetrics(SM_CXSCREEN));
+        auto screenH = static_cast<uint16_t>(cfg.height != 0 ? cfg.height : GetSystemMetrics(SM_CYSCREEN));
+        patch((BYTE*)addresses.customResPatch2, reinterpret_cast<BYTE*>(&screenW), 2);
+        patch((BYTE*)addresses.customResPatch3, reinterpret_cast<BYTE*>(&screenH), 2);
     }
     //Initial window position
     patch((BYTE*)addresses.initialWindowPositionPatch, zero, 1);
@@ -778,17 +639,7 @@ void applyBasePatches(RatataRConfig& cfg) {
     patch((BYTE*)addresses.bypassDiscRequirementPatch2, nop, 2);
     patch((BYTE*)addresses.bypassDiscRequirementPatch3, jmp, 1);
 
-    // Tell the game where the disc files can be found
-    const size_t len = rootDirectory.length();
-    BYTE* noCDDirectory = new BYTE[len + 1];
-
-    for (size_t i = 0; i < len; ++i) {
-        noCDDirectory[i] = static_cast<BYTE>(rootDirectory[i]);
-    }
-    noCDDirectory[len] = '\0';
-    patch((BYTE*)addresses.musicVideoDirectory, noCDDirectory, len);
-
-    delete[] noCDDirectory;
+    patch((BYTE*)addresses.musicVideoDirectory, (BYTE*)reinterpret_cast<const BYTE*>(rootDirectory.c_str()), rootDirectory.size() + 1);
 
     // Stop directory from being overwritten
     // This one is scary because I don't exactly know what the purpose if this one is.
@@ -821,6 +672,8 @@ void applyNonSpeedrunPatches(RatataRConfig& cfg) {
     
     //Apply FOV
     patch((BYTE*)addresses.bypassFovOverflow, (BYTE*)"\xEB", 1); //BYPASS FOV OVERFLOW ERROR
+
+    auto g_Fov = getFOV(cfg);
     patch((BYTE*)addresses.fov, reinterpret_cast<BYTE*>(&g_Fov.normal), sizeof(g_Fov.normal));
     patch((BYTE*)addresses.climbFov, reinterpret_cast<BYTE*>(&g_Fov.climbing), sizeof(g_Fov.climbing));
     patch((BYTE*)addresses.runSlideFov, reinterpret_cast<BYTE*>(&g_Fov.runningSliding), sizeof(g_Fov.runningSliding));
@@ -963,7 +816,7 @@ void ApplyHooks(RatataRConfig& cfg) {
     jmpBackAddressFpsFix2 = hookAddressFpsFix2 + hookLengthFpsFix2;
     hClipCursorAddress = addresses.hClipCursor;
     hFpsFix1Addr = addresses.hFpsFix1;
-    cleanUp = addresses.hFpsFix2CleanUp;
+    cleanUpFpsFix2 = addresses.hFpsFix2CleanUp;
     levelIdBaseAddr = addresses.levelIdBaseAddr;
     playerObjectsAddr = addresses.playerObjectsAddr;
     getIDAddr = addresses.getIDAddr;
@@ -1030,9 +883,13 @@ DWORD WINAPI MainThread(LPVOID param) {
         SetEvent(readyEvent);
         return 0;
     }
-    
-    RatataRConfig config;
-    loadConfig(config, configPath);
+
+    ConfigHandler cfgHandler;
+    cfgHandler.load(configPath);
+    RatataRConfig config = cfgHandler.getConfig();
+
+    g_EnableFrameLimit = config.maxFps > 0.0;
+    g_TargetFPS = static_cast<double>(config.maxFps);
 
     applyBasePatches(config);
     if (!config.speedrunMode) {

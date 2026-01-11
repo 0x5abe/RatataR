@@ -4,6 +4,7 @@ project(RatataR VERSION 1.0.0)
 add_library(hook
     SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/src/hook.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config_handler.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/discord_manager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/levels.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/rich-presence/rpc-client/src/rpc.cpp
