@@ -194,10 +194,10 @@ void getSignatures(PatchAddresses& address)
     ptr = FindSignature(base, size, hFpsFix2CleanUpSig);
     if (ptr)
         address.hFpsFix2CleanUp = ptr;
-
-    // TODO: Replace the hardcoded address with this signature scan.
-    // ptr = FindSignature(base, size, hookAddressDeferredCasterDrawSig);
-    address.hookAddressDeferredCasterDraw = 0x006792E7;
+    
+    ptr = FindSignature(base, size, hookAddressDeferredCasterDrawSig);
+    if (ptr)
+        address.hookAddressDeferredCasterDraw = ptr;
 
     ptr = FindSignature(base, size, patchCursorHideSig1);
     if (ptr) {

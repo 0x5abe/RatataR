@@ -62,14 +62,14 @@ inline constexpr Signature<10> hFpsFix2CleanUpSig{
 	}
 };
 
-inline constexpr Signature<12> hookAddressDeferredCasterDrawSig{
+inline constexpr Signature<14> hookAddressDeferredCasterDrawSig{
 	.bytes = {
-		0x8b, 0x06, 0x8b, 0x90, 0x88, 0x00,
-		0x00, 0x00, 0x6a, 0x02, 0xff, 0xd2
+		0x8b, 0x06, 0x8b, 0x90, 0x00, 0x00, 0x00,
+		0x00, 0x6a, 0x00, 0xff, 0xd2, 0x8b, 0x06
 	},
 	.mask = {
-		'x','x','x','x','x','x',
-		'x','x','x','x','x','x'
+		'x','x','x','x','?','?','?',
+		'?','x','?','x','x','x','x'
 	}
 };
 
