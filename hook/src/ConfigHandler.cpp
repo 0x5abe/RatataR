@@ -32,6 +32,10 @@ void ConfigHandler::load(const std::string& path) {
     LoadOption(section, "discordRichPresence", &RatataRConfig::discordRichPresence);
     LoadOption(section, "displayFrameCounter", &RatataRConfig::displayFrameCounter);
 
+    constexpr char bugfixesSection[] = "BUGFIXES";
+    LoadOption(bugfixesSection, "bugFixes", &RatataRConfig::bugFixes);
+    LoadOption(bugfixesSection, "deferredShadowCasterDraw", &RatataRConfig::deferredShadowCasterDraw);
+
     // Get display mode
     char displayModeBuffer[32];
     GetPrivateProfileStringA(
@@ -66,6 +70,10 @@ void ConfigHandler::save(const std::string& path) const {
     SaveOption(section, "speedrunMode", cfg.speedrunMode);
     SaveOption(section, "discordRichPresence", cfg.discordRichPresence);
     SaveOption(section, "displayFrameCounter", cfg.displayFrameCounter);
+
+    constexpr char bugfixesSection[] = "BUGFIXES";
+    SaveOption(bugfixesSection, "bugFixes", cfg.bugFixes);
+    SaveOption(bugfixesSection, "deferredShadowCasterDraw", cfg.deferredShadowCasterDraw);
 
     std::string modeStr;
     switch (cfg.displayMode) {

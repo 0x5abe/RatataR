@@ -62,6 +62,17 @@ inline constexpr Signature<10> hFpsFix2CleanUpSig{
 	}
 };
 
+inline constexpr Signature<12> hookAddressDeferredCasterDrawSig{
+	.bytes = {
+		0x8b, 0x06, 0x8b, 0x90, 0x88, 0x00,
+		0x00, 0x00, 0x6a, 0x02, 0xff, 0xd2
+	},
+	.mask = {
+		'x','x','x','x','x','x',
+		'x','x','x','x','x','x'
+	}
+};
+
 inline constexpr Signature<14> patchCursorHideSig1{
 	.bytes = {
 		0xf6, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00,

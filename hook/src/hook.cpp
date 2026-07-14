@@ -57,6 +57,8 @@ struct PatchAddresses
     uintptr_t hFpsFix1;
     uintptr_t hFpsFix2CleanUp;
 
+    uintptr_t hookAddressDeferredCasterDraw;
+
     uintptr_t patchCursorHide;
 
     uintptr_t customResPatch1;
@@ -192,6 +194,10 @@ void getSignatures(PatchAddresses& address)
     ptr = FindSignature(base, size, hFpsFix2CleanUpSig);
     if (ptr)
         address.hFpsFix2CleanUp = ptr;
+
+    // TODO: Replace the hardcoded address with this signature scan.
+    // ptr = FindSignature(base, size, hookAddressDeferredCasterDrawSig);
+    address.hookAddressDeferredCasterDraw = 0x006792E7;
 
     ptr = FindSignature(base, size, patchCursorHideSig1);
     if (ptr) {
@@ -428,6 +434,7 @@ extern "C" {
     uintptr_t jmpBackAddressShowConsole;
     uintptr_t jmpBackAddressFpsFix1;
     uintptr_t jmpBackAddressFpsFix2;
+    uintptr_t jmpBackAddressDeferredCasterDraw;
     uintptr_t cleanUpFpsFix2;
 }
 
@@ -518,6 +525,24 @@ void __declspec(naked) hFpsFix2() {
         push 0x1
         call timeEndPeriod
         jmp jmpBackAddressFpsFix2
+    }
+}
+
+// Changes PushDo(2) into PushDo((objectFlags & 0x100) ? 10 : 2),
+// deferring the normal color draw of shadow-casting meshes.
+void __declspec(naked) hDeferredCasterDrawOrder() {
+    __asm {
+        mov eax, [esp + 0x14]
+        test dword ptr [eax + 0x68], 0x100
+        mov eax, 0x2
+        jz use_order
+        mov eax, 0x0A
+        use_order:
+        push eax
+        mov eax, [esi]
+        mov edx, [eax + 0x88]
+        mov ecx, esi
+        jmp [jmpBackAddressDeferredCasterDraw]
     }
 }
 
@@ -761,6 +786,24 @@ void applyNonSpeedrunPatches(const RatataRConfig& cfg) {
     }
 }
 
+void applyBugFixes(const RatataRConfig& cfg) {
+    if (!cfg.bugFixes)
+        return;
+
+    if (cfg.deferredShadowCasterDraw) {
+        constexpr size_t hookLengthDeferredCasterDraw = 10;
+        jmpBackAddressDeferredCasterDraw = static_cast<DWORD>(
+            addresses.hookAddressDeferredCasterDraw + hookLengthDeferredCasterDraw
+        );
+
+        hook(
+            reinterpret_cast<void*>(addresses.hookAddressDeferredCasterDraw),
+            hDeferredCasterDrawOrder,
+            hookLengthDeferredCasterDraw
+        );
+    }
+}
+
 static bool PatchCall32(void* callInstrAddr, void* newTarget)
 {
     auto p = reinterpret_cast<std::uint8_t*>(callInstrAddr);
@@ -838,9 +881,9 @@ void ApplyHooks(const RatataRConfig& cfg) {
     const HookEntry hooks[] = {
         {addresses.hookAddressCursor, 6, hClipCursor, &jmpBackAddressCursor},
         {addresses.hookAddressSetWindowPosPush, 6, hSetWindowPosPushBL, &jmpBackAddressSetWindowPosPush, cfg.displayMode == DisplayModes::Borderless},
-        {addresses.hookAddressSetWindowPosPush, 6, hSetWindowPosPushWND, &jmpBackAddressSetWindowPosPush, cfg.displayMode != DisplayModes::Fullscreen},
-        {addresses.hookAddressConsoleEnable, 6, hEnableConsole, &jmpBackAddressConsoleEnable},
-        {addresses.hookAddressShowConsole, 6, hShowConsole, &jmpBackAddressShowConsole},
+        {addresses.hookAddressSetWindowPosPush, 6, hSetWindowPosPushWND, &jmpBackAddressSetWindowPosPush, cfg.displayMode == DisplayModes::Windowed},
+        {addresses.hookAddressConsoleEnable, 6, hEnableConsole, &jmpBackAddressConsoleEnable, cfg.console},
+        {addresses.hookAddressShowConsole, 6, hShowConsole, &jmpBackAddressShowConsole, cfg.console},
         {addresses.hookAddressFpsFix1, 7, hFpsFix1, &jmpBackAddressFpsFix1},
         {addresses.hookAddressFpsFix2, 5, hFpsFix2, &jmpBackAddressFpsFix2}
     };
@@ -931,6 +974,7 @@ DWORD WINAPI HookMain(LPVOID param) {
     applyBasePatches(config);
     if (!config.speedrunMode) {
         applyNonSpeedrunPatches(config);
+        applyBugFixes(config);
     }
     ApplyHooks(config);
 

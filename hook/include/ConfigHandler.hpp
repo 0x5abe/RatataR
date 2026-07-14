@@ -24,6 +24,8 @@ struct RatataRConfig {
     bool speedrunMode = false;
     bool discordRichPresence = false;
     bool displayFrameCounter = false;
+    bool bugFixes = false;
+    bool deferredShadowCasterDraw = true;
     DisplayModes displayMode = DisplayModes::Borderless;
 };
 
